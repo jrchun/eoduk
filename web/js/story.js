@@ -6,32 +6,36 @@ import { indexMap, applyTiles, darkFront } from './view.js';
 
 const MIN = 60000;
 const byName = (idx, n) => [...idx.byId.values()].find(c => c.name === n);
-function sceneIdx(mapData, rows) {
+// 장면은 실제 칸 상태 대신 시즌 시작 모습(구청만 켜짐)에서 출발해 연출을 얹는다
+function sceneIdx(mapData) {
   const idx = indexMap(mapData);
-  if (rows?.length) applyTiles(idx, rows);
-  else for (const c of idx.byId.values()) if (c.kind === 'land' && !c.sealed) { c.owner = c.gu; c.defense = 100; }
+  for (const c of idx.byId.values()) if (c.hall) { c.owner = c.hall; c.defense = 100; }
   return idx;
 }
 const setTile = (idx, name, owner, defense, gray = false) => { const c = byName(idx, name); if (c) Object.assign(c, { owner, defense, gray }); return c; };
+const light = (idx, owner, names) => names.forEach(n => setTile(idx, n, owner, 80));
 
-// 0: 해가 지면 어둠이 가장자리부터 먹는다 / 1: 낮에는 등불을 빼앗는다 / 2: 불을 밝힌 땅만 내일을 맞는다
+// 0: 해가 지면 어둠이 개척지 가장자리부터 먹는다 / 1: 구청에서 어둠을 밝혀 나간다 / 2: 강북 3구 연합 대 강남 3구 연합
 export const SCENES = [
   { theme: 'night', setup(idx) {
-    for (const n of ['상암 2', '상암 4', '상암 5', '성산']) setTile(idx, n, null, 0, true);
-    return { state: { myGu: 'mapo', erodingIds: new Set(darkFront(idx, 'mapo').map(c => c.id)) }, look: ['망원', 1] };
+    light(idx, 'mapo', ['망원', '합정', '성산', '홍대앞', '서강']);
+    setTile(idx, '상암', null, 0, true);
+    return { state: { myGu: 'mapo', mySide: 'n', erodingIds: new Set(darkFront(idx, 'n').map(c => c.id)) }, look: ['망원', 1] };
   } },
   { theme: 'day', fast: true, setup(idx, base) {
-    const bridge = setTile(idx, '마포대교', 'yeongdeungpo', 60), yong = setTile(idx, '용강', 'mapo', 100), seo = setTile(idx, '서강', 'mapo', 100);
-    const at = (a, b) => ({ created_at: new Date(base).toISOString(), arrive_at: new Date(base + a * MIN).toISOString(), torch: b });
+    light(idx, 'mapo', ['망원', '성산']);
+    const hall = byName(idx, '마포구청'), d1 = byName(idx, '홍대앞'), d2 = byName(idx, '합정');
+    const at = (a) => ({ created_at: new Date(base).toISOString(), arrive_at: new Date(base + a * MIN).toISOString(), torch: 0.5 });
     const marches = [
-      { id: 1, gu: 'mapo', src: seo.id, dst: bridge.id, troops: 60, ...at(11, 0.8) },
-      { id: 2, gu: 'yeongdeungpo', src: bridge.id, dst: yong.id, troops: 90, ...at(13, 0.9) },
+      { id: 1, gu: 'mapo', src: hall.id, dst: d1.id, troops: 40, kind: 'settle', ...at(11) },
+      { id: 2, gu: 'mapo', src: byName(idx, '망원').id, dst: d2.id, troops: 30, kind: 'settle', npc: true, ...at(13) },
     ];
-    return { state: { myGu: 'mapo', marches, incomingIds: new Set([yong.id]), flags: [[bridge.id, 3]] }, look: ['마포대교', 1] };
+    return { state: { myGu: 'mapo', mySide: 'n', marches }, look: ['망원', 1] };
   } },
-  { theme: 'night', setup(idx) {
-    const a = setTile(idx, '용강', 'mapo', 210), b = setTile(idx, '서강', 'mapo', 180);
-    return { state: { myGu: 'mapo', reinforced: new Set([a.id, b.id]) }, look: ['신수', 1] };
+  { theme: 'day', noFog: true, zoom: 0.55, setup(idx) {
+    light(idx, 'mapo', ['망원', '합정', '서강', '신수', '용강']); light(idx, 'yongsan', ['한강로', '원효로', '용산2가']); light(idx, 'jung', ['회현', '필동']);
+    light(idx, 'yeongdeungpo', ['문래', '영등포역', '신길']); light(idx, 'dongjak', ['대방', '상도', '노량진 수산시장']); light(idx, 'gwanak', ['은천', '서원', '청룡']);
+    return { state: { myGu: 'mapo', mySide: 'n' }, look: ['마포대교', 1] };
   } },
 ];
 
@@ -39,9 +43,9 @@ export const SCENES = [
 export function startScene(cv, i, mapData, rows) {
   const sc = SCENES[i], r = cv.getBoundingClientRect();
   cv.dataset.theme = sc.theme;
-  const idx = sceneIdx(mapData, rows), base = Date.now();
+  const idx = sceneIdx(mapData), base = Date.now();
   const { state, look } = sc.setup(idx, base);
-  const view = new MapView(cv, idx, {}, { interactive: false, size: { w: Math.max(200, r.width), h: Math.max(110, r.height) }, pc: false, zoom: 0.9 });
+  const view = new MapView(cv, idx, {}, { interactive: false, size: { w: Math.max(200, r.width), h: Math.max(110, r.height) }, pc: false, zoom: sc.zoom || 0.9, noFog: !!sc.noFog });
   view.set({ incomingIds: new Set(), erodingIds: new Set(), reinforced: new Set(), marches: [], flags: [], ...state });
   view.look(...look);
   const t0 = performance.now();
