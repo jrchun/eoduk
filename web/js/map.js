@@ -12,7 +12,7 @@ const CORNER = [...Array(6)].map((_, i) => { const a = Math.PI / 180 * (60 * i -
 // 이웃 방향(rules.js DIRS 순서) → 그 쪽 변의 꼭짓점 번호
 const EDGE_OF_DIR = { '1,0': [0, 1], '-1,0': [3, 4], '0,1': [1, 2], '0,-1': [4, 5], '1,-1': [5, 0], '-1,1': [2, 3] };
 const VARS = ['--t-land', '--t-river', '--t-river-edge', '--t-wave', '--t-park', '--t-ink', '--t-bridge', '--t-bam', '--t-paper',
-  '--tile-line', '--tile-a', '--tile-ours', '--tile-gray', '--tile-gray-line', '--tile-neutral', '--sealed', '--sealed-line', '--outline',
+  '--tile-line', '--tile-a', '--tile-ours', '--tile-dark', '--tile-gray', '--tile-gray-line', '--tile-neutral', '--sealed', '--sealed-line', '--outline',
   '--ours-dark', '--attack', '--erode', '--label-bg', '--label-fg', '--label-muted', '--label-shadow', '--pill-enemy', '--pill-ours', '--pill-fg',
   '--fog', '--fog-a', '--cloud-line', '--cloud-fill', '--eyes', '--glow', '--fg', '--ours', '--enemy'];
 
@@ -27,7 +27,7 @@ export class MapView {
     this.opts = opts; this.cv = canvas; this.g = canvas.getContext('2d'); this.idx = idx; this.h = handlers;
     this.tiles = [...idx.byId.values()];
     this.open = this.tiles.filter(c => !c.sealed);
-    this.state = { marches: [], myGu: null, selected: null, flags: [], phase: null, incomingIds: new Set(), erodingIds: new Set(), reinforced: new Set(), canMarch: false };
+    this.state = { marches: [], myGu: null, selected: null, flags: [], phase: null, incomingIds: new Set(), erodingIds: new Set(), reinforced: new Set(), canMarch: false, mySide: null, visible: null };
     this.cam = { x: 0, y: 0, s: 120 }; this.inset = 0; this.drag = null; this.pointers = new Map(); this.homed = null;
     const m = idx.size, xs = this.tiles.map(c => c.x), ys = this.tiles.map(c => c.y);
     this.plane = { x0: Math.min(...xs) - m, x1: Math.max(...xs) + m, y0: Math.min(...ys) - m, y1: Math.max(...ys) + m };
@@ -36,6 +36,7 @@ export class MapView {
     for (const c of this.tiles) for (const [cx, cy] of CORNER) { const x = c.x + cx * m, y = c.y + cy * m; px.push(KX * (x - y)); py.push(KY * (x + y)); }
     this.proj = { x0: Math.min(...px), x1: Math.max(...px), y0: Math.min(...py), y1: Math.max(...py) };
     this.river = smooth(idx.river || []);
+    this.saet = smooth(idx.saetgang || []); // 여의도 남쪽 샛강
     if (opts.interactive !== false) this.bindInput();
     if (!opts.size) new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
@@ -200,11 +201,12 @@ export class MapView {
     this.paper = this.g.createPattern(c, 'repeat');
   }
 
-  // ---------- 안개(로그인한 사람만): 우리 구 + 바깥 2줄 밖을 부드럽게 ----------
+  // ---------- 안개(로그인한 사람만): 시야(우리 연합 등불 칸 + 2칸 + sight 효과) 밖을 부드럽게 ----------
   makeFog() {
     const W = Math.ceil(this.w / LOW), H = Math.ceil(this.hgt / LOW);
-    const gu = this.state.myGu, mine = this.tiles.filter(c => c.owner === gu);
-    const centers = this.tiles.filter(c => mine.some(m => hexDistance(m, c) <= 2)).map(c => [c.x, c.y]);
+    const vis = this.state.visible;
+    const centers = vis ? [...vis].map(id => this.idx.byId.get(id)).filter(Boolean).map(c => [c.x, c.y])
+      : this.tiles.filter(c => c.owner === this.state.myGu).map(c => [c.x, c.y]);
     const r0 = this.idx.size * 0.9, band = this.idx.size * 1.8;
     const c = this.fogCanvas && this.fogCanvas.width === W && this.fogCanvas.height === H ? this.fogCanvas : Object.assign(document.createElement('canvas'), { width: W, height: H });
     const g = c.getContext('2d'), img = g.createImageData(W, H), d = img.data;
@@ -249,7 +251,7 @@ export class MapView {
       this.hexScreen(c, 1.02);
       if (c.sealed) g.fillStyle = this.css('--sealed');
       else if (c.gray) g.fillStyle = col('gray', this.css('--tile-gray'), 0.8);
-      else if (!c.owner) g.fillStyle = col('neutral', this.css('--tile-neutral'), tileA + 0.1);
+      else if (!c.owner) g.fillStyle = this.css('--tile-dark'); // 어둠(미개척)
       else if (c.owner === gu) g.fillStyle = col('ours', this.css('--tile-ours'), tileA + 0.22);
       else g.fillStyle = col(c.owner, this.css('--gu-' + c.owner), tileA + 0.1);
       g.fill();
@@ -261,6 +263,9 @@ export class MapView {
       const path = () => { g.beginPath(); g.moveTo(this.river[0][0], this.river[0][1]); for (let i = 1; i < this.river.length; i++) g.lineTo(this.river[i][0], this.river[i][1]); };
       const W = 0.9, px = 1 / (s * 0.42);
       g.lineCap = 'round'; g.lineJoin = 'round';
+      const saet = (w, col) => { if (this.saet.length < 2) return; g.beginPath(); g.moveTo(this.saet[0][0], this.saet[0][1]); for (let i = 1; i < this.saet.length; i++) g.lineTo(this.saet[i][0], this.saet[i][1]); g.lineWidth = w; g.strokeStyle = col; g.stroke(); };
+      g.lineCap = 'round'; g.lineJoin = 'round';
+      saet(0.62, this.css('--t-park')); saet(0.4 + 2.2 * px, this.css('--t-river-edge')); saet(0.4, this.css('--t-river'));
       path(); g.lineWidth = W + 0.3; g.strokeStyle = this.css('--t-park'); g.stroke();
       path(); g.lineWidth = W + 2.2 * px; g.strokeStyle = this.css('--t-river-edge'); g.stroke();
       path(); g.lineWidth = W; g.strokeStyle = this.css('--t-river'); g.stroke();
@@ -268,7 +273,8 @@ export class MapView {
       g.globalAlpha = 1; g.setLineDash([]);
       if (idx.bamseom) { const [bx, by] = idx.bamseom; g.beginPath(); g.ellipse(bx, by, 0.3, 0.1, -0.25, 0, Math.PI * 2); g.fillStyle = this.css('--t-bam'); g.fill(); }
       for (const b of idx.bridges || []) { // 다리
-        const [ax, ay] = b.at, n = normalAt(this.river, ax, ay), half = W / 2 + 0.18;
+        const [ax, ay] = b.at, line = b.saet && this.saet.length > 1 ? this.saet : this.river;
+        const n = normalAt(line, ax, ay), half = (b.saet ? 0.2 : W / 2) + 0.18;
         g.beginPath(); g.moveTo(ax - n[0] * half, ay - n[1] * half); g.lineTo(ax + n[0] * half, ay + n[1] * half);
         g.lineCap = 'butt'; g.lineWidth = 0.09; g.strokeStyle = this.css('--t-ink'); g.globalAlpha = 0.5; g.stroke();
         g.lineWidth = 0.06; g.strokeStyle = this.css('--t-bridge'); g.globalAlpha = 1; g.stroke();
@@ -314,11 +320,14 @@ export class MapView {
       }
     }
 
-    // 4) 진군선과 유닛(깊이 순), 증원한 칸의 등롱지기
-    for (const m of st.marches || []) {
+    // 4) 진군선과 유닛(깊이 순), 증원한 칸의 등롱지기, 구청 등불
+    const friend = m => (st.mySide ? idx.gu.get(m.gu)?.side === st.mySide : m.gu === gu);
+    const seen = m => !fogOn || !st.visible || st.visible.has(m.src) || st.visible.has(m.dst); // 출발·도착 중 하나라도 보이면
+    const marches = (st.marches || []).filter(seen);
+    for (const m of marches) {
       const a = pos.get(m.src), b = pos.get(m.dst); if (!a || !b) continue;
-      g.setLineDash([8, 6]); g.lineDashOffset = -now / 50; g.lineWidth = 2.5;
-      g.strokeStyle = m.gu === gu ? this.css('--pill-ours') : this.css('--pill-enemy');
+      g.setLineDash(m.kind === 'settle' ? [3, 6] : [8, 6]); g.lineDashOffset = -now / 50; g.lineWidth = 2.5;
+      g.strokeStyle = friend(m) ? this.css('--pill-ours') : this.css('--pill-enemy');
       g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); g.setLineDash([]);
     }
     const objs = [], big = s >= this.sDefault * 0.55;
@@ -327,14 +336,18 @@ export class MapView {
       const ux = c.x - idx.size * 0.3, uy = c.y + idx.size * 0.25;
       objs.push({ d: ux + uy, draw: () => { const p = this.project(ux, uy), im = IMG['lantern-ours']; if (im && big) drawImageFoot(g, im, p.x, p.y + 6, 1); } });
     }
-    for (const m of st.marches || []) {
+    for (const c of this.open) { // 구청: 꺼지지 않는 시작 등불
+      if (!c.hall || !visible(c)) continue;
+      objs.push({ d: c.x + c.y, draw: () => { const p = pos.get(c.id); drawSprite(g, 'lantern', p.x, p.y - 4, s >= this.sDefault * 0.6 ? 3 : s >= this.sDefault * 0.25 ? 2 : 1); } });
+    }
+    for (const m of marches) {
       const a = idx.byId.get(m.src), b = idx.byId.get(m.dst); if (!a || !b) continue;
-      const ours = m.gu === gu, n = Math.min(4, Math.max(2, Math.ceil(m.troops / 25)));
+      const ours = friend(m), n = m.npc ? 1 : Math.min(4, Math.max(2, Math.ceil(m.troops / 25)));
       const t = marchProgress(m, now), flip = this.project(b.x, b.y).x < this.project(a.x, a.y).x;
       for (let i = 0; i < n; i++) {
         const tt = Math.max(0, t - i * 0.06), x = a.x + (b.x - a.x) * tt, y = a.y + (b.y - a.y) * tt;
         objs.push({ d: x + y, draw: () => {
-          const p = this.project(x, y), bob = (Math.floor(now / 300) + i) % 2, im = IMG[ours ? 'torch-ours' : 'torch-enemy'];
+          const p = this.project(x, y), bob = (Math.floor(now / 300) + i) % 2, im = IMG[(m.npc ? 'fire-' : 'torch-') + (ours ? 'ours' : 'enemy')]; // 정령은 도깨비불
           if (im && big) drawImageFoot(g, im, p.x + (flip ? 1 : -1) * i * 4, p.y + 4 - bob, 1, flip);
           else drawSprite(g, bob ? 'walkA' : 'walkB', p.x, p.y - 6, 1, ours ? this.css('--ours') : this.css('--enemy'));
         } });
@@ -344,7 +357,7 @@ export class MapView {
 
     // 5) 안개
     if (fogOn) {
-      const fk = [Math.round(this.cam.x * 200), Math.round(this.cam.y * 200), Math.round(s * 10), this.inset, gu, this.w, this.hgt, theme, this.tiles.filter(c => c.owner === gu).length].join('|');
+      const fk = [Math.round(this.cam.x * 200), Math.round(this.cam.y * 200), Math.round(s * 10), this.inset, gu, this.w, this.hgt, theme, st.visible ? st.visible.size : this.tiles.filter(c => c.owner === gu).length].join('|');
       if (fk !== this.fogKey) { this.makeFog(); this.fogKey = fk; }
       g.imageSmoothingEnabled = true;
       g.drawImage(this.fogCanvas, 0, 0, this.fogCanvas.width * LOW, this.fogCanvas.height * LOW);
@@ -389,12 +402,13 @@ export class MapView {
       this.text(c.name, p.x, p.y, 12, false, placed, false);
     }
     // 진군 카운트다운 알약(우리 진군, 우리 칸으로 오는 진군)
-    for (const m of st.marches || []) {
-      const ours = m.gu === gu, toUs = gu && idx.byId.get(m.dst)?.owner === gu;
+    for (const m of marches) {
+      const ours = friend(m), dst = idx.byId.get(m.dst), toUs = st.mySide && dst?.owner && idx.gu.get(dst.owner)?.side === st.mySide;
       if (!ours && !toUs) continue;
       const a = pos.get(m.src), b = pos.get(m.dst), left = fmtLeft(Date.parse(m.arrive_at) - now);
-      const name = idx.byId.get(m.dst).name.replace(/·.*/, '');
-      this.pill(ours ? `→ ${name} ${left}` : `${name} ${left}`, (a.x + b.x) / 2, (a.y + b.y) / 2 - 30, ours ? this.css('--pill-ours') : this.css('--pill-enemy'));
+      const name = dst.name.replace(/·.*/, ''), who = m.npc ? '정령 ' : '';
+      const label = ours ? (m.kind === 'settle' ? `${who}개척 ${name} ${left}` : `${who}→ ${name} ${left}`) : `${who}${name} ${left}`;
+      this.pill(label, (a.x + b.x) / 2, (a.y + b.y) / 2 - 30, ours ? this.css('--pill-ours') : this.css('--pill-enemy'));
     }
   }
 

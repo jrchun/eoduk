@@ -96,7 +96,7 @@ test('밤 침식: 압력 30 + 10×틱 + 응시(최대 30), 긴 밤 1.5배', () =
   for (let k = 1; k <= 8; k++) { const e = R.erode(def, R.nightPressure(k), 'legend'); assert.equal(e.lost, false); def = e.left; }
 });
 
-test('지도: 서울 25개 구 중 6개 구가 열림, 열린 칸 1~120(DB와 같음), 다리 4개가 강 양쪽에 닿음', () => {
+test('지도(v3): 서울 25개 구 중 6개 구 열림, 구청 6칸, 여의도는 사방이 강인 섬, 다리 8개, 랜드마크 효과 7곳', () => {
   const idx = V.indexMap(map);
   assert.equal(map.gu.length, 25);
   assert.equal(map.gu.filter(g => g.open).length, 6);
@@ -104,58 +104,121 @@ test('지도: 서울 25개 구 중 6개 구가 열림, 열린 칸 1~120(DB와 �
   assert.equal(open.length, 120);
   assert.deepEqual(open.map(t => t.id).sort((a, b) => a - b), Array.from({ length: 120 }, (_, i) => i + 1));
   assert.ok(sealed.length > 300 && sealed.every(t => t.id > 1000 && t.home), '봉인된 칸');
+  // 구청: 열린 구마다 하나, 그 구의 섬 밖 땅
+  const halls = open.filter(t => t.hall);
+  assert.deepEqual(halls.map(t => t.hall).sort(), map.gu.filter(g => g.open).map(g => g.id).sort());
+  for (const h of halls) { assert.equal(h.gu, h.hall); assert.ok(!h.island); assert.equal(h.name, map.gu.find(g => g.id === h.hall).name + '청'); }
+  // 여의도: 섬 칸의 이웃은 섬·강·다리뿐, 섬 칸은 주인 없는 중립
+  const island = open.filter(t => t.island);
+  assert.ok(island.length >= 3);
+  for (const t of island) {
+    assert.equal(t.gu, null);
+    for (const n of t.adj.map(id => idx.byId.get(id))) assert.ok(n.island || n.kind !== 'land', `${t.name}-${n.name}`);
+  }
+  // 다리 8개: 각각 서로 다른 땅덩이(강북·강남·여의도) 둘 이상에 닿는다
   const side = Object.fromEntries(map.gu.map(g => [g.id, g.side]));
-  for (const c of open.filter(t => t.kind === 'land')) {
-    for (const n of c.adj.map(id => idx.byId.get(id)).filter(n => !n.sealed)) {
-      if (n.kind === 'land') assert.equal(side[n.gu], side[c.gu], `${c.name}-${n.name}`);
-    }
-  }
   const bridges = open.filter(t => t.kind === 'bridge');
-  assert.deepEqual(bridges.map(b => b.name).sort(), ['동작대교', '마포대교', '양화대교', '한강대교']);
+  assert.equal(bridges.length, 8);
   for (const b of bridges) {
-    const sides = new Set(b.adj.map(id => idx.byId.get(id)).filter(n => n.kind === 'land' && !n.sealed).map(n => side[n.gu]));
-    assert.equal(sides.size, 2, b.name);
+    const masses = new Set(b.adj.map(id => idx.byId.get(id)).filter(n => n.kind === 'land' && !n.sealed).map(n => (n.island ? 'i' : side[n.gu])));
+    assert.ok(masses.size >= 2, b.name);
   }
-  for (const g of map.gu.filter(g => g.open)) assert.ok(open.filter(t => t.gu === g.id).length >= 10, g.id);
-  // 봉인된 칸은 칠 수 없다
-  const s0 = sealed.find(t => t.kind === 'land');
-  assert.equal(V.playable(s0), false);
+  // 강북·강남 땅은 다리 없이 맞닿지 않는다
+  for (const c of open.filter(t => t.kind === 'land' && !t.island))
+    for (const n of c.adj.map(id => idx.byId.get(id)).filter(n => n.kind === 'land' && !n.sealed && !n.island)) assert.equal(side[n.gu], side[c.gu], `${c.name}-${n.name}`);
+  // 랜드마크 효과 7곳, 여의도 3곳은 섬 위
+  const fx = Object.fromEntries(open.filter(t => t.effect).map(t => [t.name, t.effect]));
+  assert.deepEqual(fx, { '남산서울타워': 'sight+2', '서울역': 'prod+5', '보라매공원': 'sight+2', '영등포역': 'prod+5', '국회의사당': 'speed+10', '더현대·파크원': 'prod+5', '63빌딩': 'nightres+10' });
+  for (const n of ['국회의사당', '더현대·파크원', '63빌딩']) assert.ok(open.find(t => t.name === n).island, n);
+  assert.equal(V.playable(sealed.find(t => t.kind === 'land')), false);
 });
 
-function sampleIdx() {
+// 시즌 시작(구청만 켜짐) 상태의 지도
+function startIdx() {
   const idx = V.indexMap(map);
-  V.applyTiles(idx, map.tiles.filter(t => t.kind !== 'river' && !t.sealed).map(t => [t.id, t.kind === 'bridge' ? null : t.gu, t.kind === 'bridge' ? 40 : 100, false]));
+  V.applyTiles(idx, map.tiles.filter(t => t.kind !== 'river' && !t.sealed).map(t => [t.id, t.hall || null, t.hall ? 100 : 0, false, null]));
   return idx;
 }
 const byName = (idx, n) => [...idx.byId.values()].find(c => c.name === n).id;
+const lightUp = (idx, name, gu, def = 50) => Object.assign(idx.byId.get(byName(idx, name)), { owner: gu, defense: def, gray: false });
 
-test('화면 규칙: 칠 수 있는 칸, 출발 칸, 진군 미리보기', () => {
-  const idx = sampleIdx();
-  const bridge = byName(idx, '마포대교');
-  assert.equal(V.canAttack(idx, bridge, 'mapo'), true);
-  assert.equal(V.canAttack(idx, byName(idx, '용강'), 'mapo'), false); // 우리 칸
-  assert.equal(V.canAttack(idx, byName(idx, '서울대'), 'mapo'), false); // 안 맞닿음
-  assert.equal(V.canAttack(idx, byName(idx, '밤섬'), 'mapo'), false); // 강
-  const src = V.bestSource(idx, bridge, 'mapo');
-  assert.equal(idx.byId.get(src).owner, 'mapo');
-  assert.equal(V.marchPreview(idx, src, bridge, 'mapo').minutes, 13);
-  assert.equal(V.marchPreview(idx, V.bestSource(idx, bridge, 'yeongdeungpo'), bridge, 'yeongdeungpo').minutes, 10);
+test('개척(v3): 필요 병력 = 20 + 5 × 구청 거리, 다리 +10, 잿빛 절반 / 연합 땅에 붙은 어둠 칸만', () => {
+  assert.equal(R.settleNeed(0), 20);
+  assert.equal(R.settleNeed(3), 35);
+  assert.equal(R.settleNeed(3, { bridge: true }), 45);
+  assert.equal(R.settleNeed(3, { gray: true }), 18);
+  assert.equal(R.settleNeed(3, { bridge: true, saet: true }), 80); // 샛강 다리 +45
+  { const idx = startIdx(); assert.equal(V.settleNeedFor(idx, byName(idx, '여의교'), 'yeongdeungpo'), 20 + 5 * 1 + 45); }
+  const idx = startIdx();
+  const hall = idx.byId.get(byName(idx, '마포구청'));
+  const next = hall.adj.map(id => idx.byId.get(id)).find(c => c.kind === 'land');
+  assert.equal(V.canSettle(idx, next.id, 'n'), true);
+  assert.equal(V.canSettle(idx, next.id, 's'), false); // 강남 연합 땅에 붙지 않음
+  assert.equal(V.canSettle(idx, byName(idx, '서울대'), 'n'), false);
+  assert.equal(V.canSettle(idx, hall.id, 'n'), false); // 이미 켜진 칸
+  assert.equal(V.settleNeedFor(idx, next.id, 'mapo'), 25);
+  // 같은 연합의 다른 구가 켠 칸 옆도 개척할 수 있다
+  lightUp(idx, '공덕', 'yongsan');
+  assert.equal(V.canSettle(idx, byName(idx, '염리'), 'n'), true);
 });
 
-test('화면 규칙: 다가오는 공격, 진군 진행, 어둠과 맞닿은 칸, 순위', () => {
-  const idx = sampleIdx();
-  const t = byName(idx, '용강');
+test('쟁탈·증원(v3): 다른 연합 등불 칸 중 우리 연합 땅에 맞닿은 칸만 공격, 구청은 공격 불가, 증원은 연합 어느 칸이든', () => {
+  const idx = startIdx();
+  lightUp(idx, '양화대교', 'mapo'); lightUp(idx, '양평', 'yeongdeungpo');
+  assert.equal(V.canAttack(idx, byName(idx, '양평'), 'n'), true);
+  assert.equal(V.canAttack(idx, byName(idx, '양화대교'), 's'), true);
+  assert.equal(V.canAttack(idx, byName(idx, '영등포구청'), 'n'), false); // 구청
+  assert.equal(V.canAttack(idx, byName(idx, '관악구청'), 'n'), false);
+  assert.equal(V.canReinforce(idx, byName(idx, '용산구청'), 'n'), true); // 같은 연합 다른 구
+  assert.equal(V.canReinforce(idx, byName(idx, '양평'), 'n'), false);
+  // 연결 보너스는 같은 연합 칸 기준
+  lightUp(idx, '합정', 'mapo');
+  assert.ok(V.ownNeighborCount(idx, byName(idx, '양화대교'), 'mapo') >= 1);
+  const src = V.bestSource(idx, byName(idx, '양평'), 'n');
+  assert.equal(idx.byId.get(src).name, '양화대교');
+});
+
+test('밤 침식 대상(v3): 어둠과 맞닿은 연합 등불 칸(개척지 가장자리), 구청은 빠진다', () => {
+  const idx = startIdx();
+  assert.equal(V.darkFront(idx, 'n').length, 0); // 구청만 있으면 먹힐 칸이 없다
+  lightUp(idx, '망원', 'mapo');
+  assert.deepEqual(V.darkFront(idx, 'n').map(c => c.name), ['망원']);
+  assert.equal(V.darkFront(idx, 's').length, 0);
+});
+
+test('응시·효과·점수·정령(v3)', () => {
+  const rows = [{ tile: 1, player: 'a' }, { tile: 1, player: 'a' }, { tile: 1, player: 'b' }, { tile: 1, player: 'c', npc: true }, { tile: 2, player: 'd' }];
+  assert.equal(R.gazeCount(rows, 1), 2); // 같은 사람 두 번은 한 명, 정령 제외
+  const m = R.allianceMods(['prod+5', 'prod+5', 'prod+5', 'prod+5', 'speed+10', 'sight+2', 'sight+2']);
+  assert.equal(m.prod, 0.15); assert.equal(m.speed, 0.1); assert.equal(m.sight, 4); assert.equal(m.nightres, 0);
+  assert.equal(R.effectText('nightres+10'), '밤 어둠 저항 +10%');
+  assert.equal(R.seasonScore(10, 2), 16);
+  assert.equal(R.keptRatio(8, 2), 0.8);
+  assert.equal(R.npcWanted(0), 6); assert.equal(R.npcWanted(5), 3); assert.equal(R.npcWanted(12), 0);
+  assert.equal(R.marchMinutes(1, { speed: 0.1 }), 12);
+  const idx = startIdx();
+  lightUp(idx, '국회의사당', 'yeongdeungpo'); lightUp(idx, '망원', 'mapo');
+  const sc = V.scores(idx);
+  assert.equal(sc.side.s.score, 3 + 1 + 3); // 구청 3 + 국회의사당 1칸 + 랜드마크 3
+  assert.equal(sc.side.n.score, 4);
+  assert.deepEqual(V.sideEffects(idx, 's'), ['speed+10']);
+  const vis = V.visibleSet(idx, 'n', 0);
+  assert.ok(vis.has(byName(idx, '마포구청')) && !vis.has(byName(idx, '관악구청')));
+});
+
+test('화면 규칙: 다가오는 공격(연합), 진군 진행, 순위(점수)', () => {
+  const idx = startIdx();
+  lightUp(idx, '양화대교', 'mapo'); lightUp(idx, '양평', 'yeongdeungpo');
   const ms = [
-    { id: 1, gu: 'yeongdeungpo', dst: t, created_at: '2026-11-27T05:00:00Z', arrive_at: '2026-11-27T05:20:00Z' },
-    { id: 2, gu: 'mapo', dst: byName(idx, '마포대교'), created_at: '2026-11-27T05:00:00Z', arrive_at: '2026-11-27T05:10:00Z' },
-    { id: 3, gu: 'jung', dst: t, created_at: '2026-11-27T05:00:00Z', arrive_at: '2026-11-27T05:12:00Z' },
+    { id: 1, gu: 'yeongdeungpo', kind: 'attack', dst: byName(idx, '양화대교'), created_at: '2026-11-27T05:00:00Z', arrive_at: '2026-11-27T05:20:00Z' },
+    { id: 2, gu: 'jung', kind: 'attack', dst: byName(idx, '양화대교'), created_at: '2026-11-27T05:00:00Z', arrive_at: '2026-11-27T05:12:00Z' },
+    { id: 3, gu: 'dongjak', kind: 'settle', dst: byName(idx, '양화대교'), created_at: '2026-11-27T05:00:00Z', arrive_at: '2026-11-27T05:10:00Z' },
   ];
-  assert.deepEqual(V.incoming(idx, ms, 'mapo').map(m => m.id), [3, 1]);
+  assert.deepEqual(V.incoming(idx, ms, 'n').map(m => m.id), [1]); // 같은 연합 진군·개척은 빼고
   assert.equal(V.marchProgress(ms[0], Date.parse('2026-11-27T05:10:00Z')), 0.5);
-  assert.ok(V.darkFront(idx, 'jung').length >= 5);
-  const ranked = V.rankGus(map.gu, V.countTiles(idx));
-  assert.equal(ranked[0].id, 'gwanak');
-  assert.equal(ranked.length, 6); // 열린 구만 순위에
+  const ranked = V.rankGus(map.gu, V.countTiles(idx), V.scores(idx));
+  assert.equal(ranked.length, 6);
+  assert.ok(['mapo', 'yeongdeungpo'].includes(ranked[0].id));
   assert.equal(V.troopsLocal(10, 30, 0, 3600000), 40);
 });
 

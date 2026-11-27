@@ -21,7 +21,42 @@ export const BAL = {
   gazePer: 3, gazeMax: 30,
   longNight: 1.5,       // 7일째(일요일) 긴 밤 압력 배율
   erodeKeep: 0.25,      // 버틴 칸이 잃는 수비 = 압력 × 0.25 ÷ 저항
+  // v3 개척형
+  hallStart: 100,       // 구청 칸 시작 수비(시즌 시작 때 켜진 유일한 칸)
+  settleBase: 20,       // 개척 필요 병력 = 20 + 5 × 구청까지 칸 거리 (+한강 다리 10, 샛강 다리 45, 잿빛 칸은 절반)
+  settlePerDist: 5,
+  bridgeSettle: 10,
+  saetBridge: 45,       // 샛강 다리(여의교·서울교). 영등포구청 바로 옆이라 비싸게 둬야 여의도를 양쪽이 비슷하게 가져간다(sim.mjs)
+  landmarkScore: 3,     // 시즌 점수 = 등불 칸 + 랜드마크 칸 × 3
+  effectCap: 0.15,      // 같은 종류 랜드마크 효과 합계 상한
+  sightBase: 2,         // 시야 = 연합 등불 칸 + 2칸(+ sight 효과)
+  npcTarget: 8,         // 등불 정령 수 = max(0, 8 - 최근 24시간 활동한 사람), 연합당 최대 6
+  npcMax: 6,
+  npcShare: 0.4,        // 연합 하루 행동 중 정령 비율 상한
 };
+
+// ---------- v3: 연합·개척·랜드마크·점수 ----------
+export const ALLIANCE = { n: '강북 3구 연합', s: '강남 3구 연합' };
+export const allianceName = side => ALLIANCE[side] || '';
+export function settleNeed(dist, { bridge = false, saet = false, gray = false } = {}) {
+  const n = BAL.settleBase + BAL.settlePerDist * dist + (bridge ? (saet ? BAL.saetBridge : BAL.bridgeSettle) : 0);
+  return Math.ceil(gray ? n / 2 : n);
+}
+// 'prod+5' → { kind: 'prod', val: 5 }
+export function parseEffect(e) { const m = /^(\w+)\+(\d+)$/.exec(e || ''); return m ? { kind: m[1], val: +m[2] } : null; }
+export const EFFECT_TEXT = { prod: n => `병력 생산 +${n}%`, speed: n => `진군·개척 시간 -${n}%`, nightres: n => `밤 어둠 저항 +${n}%`, sight: n => `시야 +${n}칸` };
+export function effectText(e) { const p = parseEffect(e); return p ? EFFECT_TEXT[p.kind](p.val) : ''; }
+// 연합이 가진 랜드마크 효과를 합친다(% 효과는 종류별 최대 15%)
+export function allianceMods(effects) {
+  const sum = { prod: 0, speed: 0, nightres: 0, sight: 0 };
+  for (const e of effects) { const p = parseEffect(e); if (p) sum[p.kind] += p.val; }
+  return { prod: Math.min(BAL.effectCap, sum.prod / 100), speed: Math.min(BAL.effectCap, sum.speed / 100), nightres: Math.min(BAL.effectCap, sum.nightres / 100), sight: sum.sight };
+}
+export const seasonScore = (lit, landmarks) => lit + BAL.landmarkScore * landmarks;
+export const keptRatio = (litAtMidnight, consumed) => (litAtMidnight + consumed ? litAtMidnight / (litAtMidnight + consumed) : 1);
+// 응시: 그 칸을 본 로그인한 사람(정령 제외) 고유 수
+export function gazeCount(rows, tile) { return new Set(rows.filter(r => r.tile === tile && !r.npc).map(r => r.player)).size; }
+export function npcWanted(activeHumans) { return Math.min(BAL.npcMax, Math.max(0, BAL.npcTarget - activeHumans)); }
 
 // 유닛: 칸에 쌓인 병력은 모두 등롱지기, 진군 때 횃불꾼 비율을 고른다.
 export const UNIT = { torch: { atk: 1.2, def: 0.8 }, lantern: { atk: 0.8, def: 1.2, night: 0.2 } };
@@ -130,8 +165,8 @@ export function popFactor(guPlayers, avgPlayers) {
   if (!guPlayers || !avgPlayers) return 1;
   return Math.min(1.3, Math.max(0.7, 1 / Math.sqrt(guPlayers / avgPlayers)));
 }
-export function prodRate(phase, type, factor = 1) {
-  return BAL.prodPerHour * (phase === 'day' ? 1 : BAL.nightProd) * typeMods(type).prod * factor;
+export function prodRate(phase, type, factor = 1, prodMod = 0) {
+  return BAL.prodPerHour * (phase === 'day' ? 1 : BAL.nightProd) * typeMods(type).prod * factor * (1 + prodMod);
 }
 // 저장된 병력(at 시각 기준)에서 now까지 쌓인 양. rate는 시간당.
 export function troopsNow(stored, atMs, nowMs, rate) {
@@ -140,10 +175,10 @@ export function troopsNow(stored, atMs, nowMs, rate) {
 }
 
 // ---------- 진군 ----------
-export function marchMinutes(dist, { type = '', targetType = '', gray = false } = {}) {
+export function marchMinutes(dist, { type = '', targetType = '', gray = false, speed = 0 } = {}) {
   let m = Math.min(BAL.marchMax, BAL.marchBase + BAL.marchPerStep * dist);
   const t = typeMods(type);
-  m *= t.march;
+  m *= t.march * (1 - speed);
   if (type === 'river' && targetType === 'mount') m *= 1.2;
   if (gray) m *= 0.5;
   return Math.max(1, Math.round(m));
@@ -175,10 +210,10 @@ export function nightPressure(tick, watchers = 0, longNight = false) {
   const base = (30 + 10 * tick) * (longNight ? BAL.longNight : 1);
   return base + Math.min(BAL.gazeMax, BAL.gazePer * watchers);
 }
-export function nightResist(type) { return (1 + UNIT.lantern.night) * typeMods(type).nightRes; }
+export function nightResist(type, nightresMod = 0) { return (1 + UNIT.lantern.night) * typeMods(type).nightRes * (1 + nightresMod); }
 // 어둠과 맞닿은 칸 하나에 압력을 준다. 버티면 수비가 깎이고, 못 버티면 잿빛 칸이 된다.
-export function erode(def, pressure, type) {
-  const res = nightResist(type);
+export function erode(def, pressure, type, nightresMod = 0) {
+  const res = nightResist(type, nightresMod);
   if (pressure > def * res) return { lost: true, left: 0 };
   return { lost: false, left: Math.max(0, Math.round(def - pressure * BAL.erodeKeep / res)) };
 }

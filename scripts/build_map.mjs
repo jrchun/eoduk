@@ -17,12 +17,12 @@ const pilotCodes = new Set(gu.features.map(f => f.properties.code));
 const dong = { features: dongAll.features.filter(f => pilotCodes.has(f.properties.code.slice(0, 5))) };
 
 export const GU = {
-  '마포구': { id: 'mapo', short: '마포', type: 'river', side: 'n', symbol: '절두산 물결', color: '#3E7C8C' },
-  '용산구': { id: 'yongsan', short: '용산', type: 'legend', side: 'n', symbol: '남산 봉수', color: '#8C5A3E' },
-  '중구': { id: 'jung', short: '중구', type: 'city', side: 'n', symbol: '숭례문 기와', color: '#6B4E8C' },
-  '영등포구': { id: 'yeongdeungpo', short: '영등포', type: 'city', side: 's', symbol: '여의도 63', color: '#B07A2A' },
-  '동작구': { id: 'dongjak', short: '동작', type: 'river', side: 's', symbol: '노들 백로', color: '#4E7A4E' },
-  '관악구': { id: 'gwanak', short: '관악', type: 'legend', side: 's', symbol: '낙성대 별', color: '#A0463C' },
+  '마포구': { id: 'mapo', short: '마포', type: 'river', side: 'n', symbol: '절두산 물결', color: '#3E7C8C', hall: [126.9019, 37.5663] },
+  '용산구': { id: 'yongsan', short: '용산', type: 'legend', side: 'n', symbol: '남산 봉수', color: '#8C5A3E', hall: [126.9905, 37.5324] },
+  '중구': { id: 'jung', short: '중구', type: 'city', side: 'n', symbol: '숭례문 기와', color: '#6B4E8C', hall: [126.9975, 37.5637] },
+  '영등포구': { id: 'yeongdeungpo', short: '영등포', type: 'city', side: 's', symbol: '여의도 63', color: '#B07A2A', hall: [126.8962, 37.5264] },
+  '동작구': { id: 'dongjak', short: '동작', type: 'river', side: 's', symbol: '노들 백로', color: '#4E7A4E', hall: [126.9393, 37.5049] },
+  '관악구': { id: 'gwanak', short: '관악', type: 'legend', side: 's', symbol: '낙성대 별', color: '#A0463C', hall: [126.9516, 37.4784] },
 };
 // 봉인된 19개 구(기획서 8절 유형). 열면 GU로 옮기고 web/styles.css에 --gu-<id> 색을 더한다.
 export const SEALED = {
@@ -61,7 +61,11 @@ const RIVER_WEST = [[126.795, 37.598], [126.815, 37.592], [126.838, 37.585], [12
 const RIVER_EAST = [[127.024, 37.535], [127.040, 37.537], [127.058, 37.531], [127.072, 37.523], [127.090, 37.521],
   [127.104, 37.530], [127.114, 37.543], [127.130, 37.553], [127.152, 37.563], [127.178, 37.574]];
 const RIVER_FULL = [...RIVER_WEST, ...RIVER, ...RIVER_EAST];
-const BRIDGES = [['양화대교', [126.903, 37.544]], ['마포대교', [126.936, 37.535]], ['한강대교', [126.959, 37.516]], ['동작대교', [126.981, 37.508]]];
+// 다리(v3): 한강 6개 + 샛강 2개. 가장 가까운, 서로 다른 땅덩이(강북·강남·여의도) 둘에 닿는 강 칸
+const BRIDGES = [['양화대교', [126.903, 37.544]], ['서강대교', [126.926, 37.538]], ['마포대교', [126.936, 37.535]], ['원효대교', [126.949, 37.527]],
+  ['한강대교', [126.959, 37.516]], ['동작대교', [126.981, 37.508]], ['여의교', [126.905, 37.523]], ['서울교', [126.917, 37.518]]];
+// 랜드마크 효과(v3 1-3). 그 칸을 가진 연합 전체에 적용, 같은 종류 합계 최대 15%
+const EFFECTS = { '남산서울타워': 'sight+2', '서울역': 'prod+5', '보라매공원': 'sight+2', '영등포역': 'prod+5', '국회의사당': 'speed+10', '더현대·파크원': 'prod+5', '63빌딩': 'nightres+10' };
 // 쿼터뷰 랜드마크 그림(web/assets/landmarks/landmark-<key>.png). 실제 위치에 세운다.
 const SPRITES = [
   ['assembly', [126.9140, 37.5318]], ['parc1', [126.9271, 37.5276]], ['thehyundai', [126.9283, 37.5259]],
@@ -148,15 +152,35 @@ export function buildMap() {
     for (const c of cells.values()) if (pred(c)) { const dd = Math.hypot(c.x - px, c.y - py); if (dd < bd) { bd = dd; best = c; } }
     return best;
   };
-  // 다리 칸: 강 북쪽 땅과 남쪽 땅에 모두 닿는 강 칸 중 다리 위치에서 가장 가까운 것
+  // 여의도(v3 1-2): 여의동 땅은 주인 없는 섬. 섬에 붙은 섬 밖 땅 칸은 샛강(강 칸)으로 바꿔 사방을 강으로 두른다
+  for (const c of cells.values()) if (c.kind === 'land' && c.dong === '여의동') { c.island = true; c.gu = null; }
+  for (const c of [...cells.values()]) if (c.island) for (const [q, r] of neighbors(c.q, c.r)) {
+    const o = cells.get(key(q, r));
+    if (o && o.kind === 'land' && !o.island) { o.kind = 'river'; o.gu = null; o.saet = true; }
+  }
+  // 다리: 서로 다른 땅덩이(강북 n, 강남 s, 여의도 i) 둘 이상에 닿는 강 칸 중 다리 위치에서 가장 가까운 칸
   const SIDE = Object.fromEntries(Object.values(GU).map(g => [g.id, g.side]));
-  const sidesOf = c => new Set(neighbors(c.q, c.r).map(([q, r]) => cells.get(key(q, r))).filter(n => n?.kind === 'land').map(n => SIDE[n.gu]));
-  for (const [name, ll] of BRIDGES) { const c = nearest(ll, c => c.kind === 'river' && sidesOf(c).size === 2); c.kind = 'bridge'; c.name = name; }
-  for (const [name, ll] of LANDMARKS) { const c = nearest(ll, c => c.kind === 'land' && !c.landmark); if (c) { c.name = name; c.landmark = true; } }
+  const mass = c => (c.island ? 'i' : SIDE[c.gu]);
+  const massesOf = c => new Set(neighbors(c.q, c.r).map(([q, r]) => cells.get(key(q, r))).filter(n => n?.kind === 'land').map(mass));
+  for (const [name, ll] of BRIDGES) {
+    const c = nearest(ll, c => c.kind === 'river' && massesOf(c).size >= 2);
+    if (!c) throw new Error('다리 자리를 찾지 못함: ' + name);
+    c.kind = 'bridge'; c.name = name; c.saetBridge = !!c.saet;
+  }
+  // 구청 = 시작 칸(그 구의 섬 밖 땅 중 구청에서 가장 가까운 칸)
+  for (const [full, g] of Object.entries(GU)) {
+    const c = nearest(g.hall, c => c.kind === 'land' && c.gu === g.id && !c.island);
+    c.hall = g.id; c.name = full + '청';
+  }
+  const ISLAND_LM = new Set(['국회의사당', '더현대·파크원', '63빌딩']);
+  for (const [name, ll] of LANDMARKS) {
+    const c = nearest(ll, c => c.kind === 'land' && !c.landmark && !c.hall && !!c.island === ISLAND_LM.has(name));
+    if (c) { c.name = name; c.landmark = true; if (EFFECTS[name]) c.effect = EFFECTS[name]; }
+  }
   // 강 칸 이름: 밤섬 근처는 밤섬
   const bam = nearest([126.927, 37.540], c => c.kind === 'river'); if (bam) bam.name = '밤섬';
   // 나머지 이름: 동 이름(같은 이름이 여러 칸이면 뒤에 번호)
-  const used = Object.fromEntries(LANDMARKS.map(([n]) => [n, 1]));
+  const used = Object.fromEntries([...LANDMARKS.map(([n]) => [n, 1]), ...Object.keys(GU).map(n => [n + '청', 1])]);
   for (const c of [...cells.values()].sort((a, b) => a.r - b.r || a.q - b.q)) {
     if (c.name) continue;
     if (c.kind === 'river') { c.name = '한강'; continue; }
@@ -170,16 +194,17 @@ export function buildMap() {
   for (const c of list) {
     const ns = neighbors(c.q, c.r).map(([q, r]) => idOf.get(key(q, r))).filter(Boolean);
     c.edge = ns.length < 6; // 지도 가장자리(어둠이 들어오는 곳)
-    if (c.dong === '여의동') c.island = true; // 여의도(섬 땅 색)
     delete c.dong;
   }
   const km = ll => toKm(ll).map(v => +v.toFixed(3));
   const tileAt = ll => { const [x, y] = toKm(ll); let best = null, bd = 1e9; for (const c of list) { const d = Math.hypot(c.x - x, c.y - y); if (d < bd) { bd = d; best = c; } } return best.id; };
   return {
     size: SIZE, list, river: riverKm.map(([x, y]) => [+x.toFixed(3), +y.toFixed(3)]),
-    bridges: BRIDGES.map(([name, ll]) => ({ name, at: km(ll) })),
+    bridges: BRIDGES.map(([name, ll]) => { const t = list.find(c => c.name === name); return { name, at: t.saetBridge ? [t.x, t.y] : km(ll), saet: !!t.saetBridge }; }),
     sprites: SPRITES.map(([key, ll]) => ({ key, at: km(ll), tile: tileAt(ll) })),
     bamseom: km(BAMSEOM),
+    // 샛강 물길(화면에 가는 강으로 그린다): 샛강 칸 중심을 서→동으로
+    saetgang: list.filter(c => c.saet).sort((a, b) => (a.x - a.y) - (b.x - b.y)).map(c => [c.x, c.y]),
     riverFull: riverFullKm.map(([x, y]) => [+x.toFixed(3), +y.toFixed(3)]),
   };
 }
@@ -192,16 +217,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     ...Object.entries(SEALED).map(([full, g]) => ({ ...g, name: full, open: false }))];
   const sealed = buildSealed(m.list);
   mkdirSync(ROOT + 'web/data', { recursive: true });
-  writeFileSync(ROOT + 'web/data/map.json', JSON.stringify({ size: m.size, river: m.riverFull, bridges: m.bridges, sprites: m.sprites, bamseom: m.bamseom, gu: gus, tiles: [...m.list, ...sealed] }) + '\n');
-  const rows = m.list.map(c => `(${c.id},${c.q},${c.r},${sqlStr(c.kind)},${sqlStr(c.gu)},${sqlStr(c.name)},${c.edge},${!!c.landmark})`);
+  writeFileSync(ROOT + 'web/data/map.json', JSON.stringify({ size: m.size, river: m.riverFull, saetgang: m.saetgang, bridges: m.bridges, sprites: m.sprites, bamseom: m.bamseom, gu: gus, tiles: [...m.list, ...sealed] }) + '\n');
+  const rows = m.list.map(c => `(${c.id},${c.q},${c.r},${sqlStr(c.kind)},${sqlStr(c.gu)},${sqlStr(c.name)},${c.edge},${!!c.landmark},${sqlStr(c.hall || null)},${sqlStr(c.effect || null)})`);
   const guRows = gus.map(g => `(${sqlStr(g.id)},${sqlStr(g.name)},${sqlStr(g.short)},${sqlStr(g.type)},${sqlStr(g.side)},${g.open})`);
   writeFileSync(ROOT + 'supabase/seed.sql', `-- scripts/build_map.mjs가 만든 파일(손으로 고치지 않는다). 칸 ${m.list.length}개.
 insert into public.gus (id, name, short, type, side, open) values
 ${guRows.join(',\n')}
 on conflict (id) do update set name = excluded.name, short = excluded.short, type = excluded.type, side = excluded.side, open = excluded.open;
-insert into public.tile_defs (id, q, r, kind, home_gu, name, edge, landmark) values
+insert into public.tile_defs (id, q, r, kind, home_gu, name, edge, landmark, hall_gu, effect) values
 ${rows.join(',\n')}
-on conflict (id) do update set q = excluded.q, r = excluded.r, kind = excluded.kind, home_gu = excluded.home_gu, name = excluded.name, edge = excluded.edge, landmark = excluded.landmark;
+on conflict (id) do update set q = excluded.q, r = excluded.r, kind = excluded.kind, home_gu = excluded.home_gu, name = excluded.name, edge = excluded.edge, landmark = excluded.landmark, hall_gu = excluded.hall_gu, effect = excluded.effect;
 `);
   const count = {}; for (const c of m.list) count[c.gu || c.kind] = (count[c.gu || c.kind] || 0) + 1;
   console.log('열린 칸', m.list.length, count, '· 봉인된 칸', sealed.length);

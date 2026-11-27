@@ -16,7 +16,7 @@
   --t-ink:#2b2420; --t-bridge:#c9b48a; --t-bam:#7f9c66;
   --sealed:#e3dccb; --sealed-line:#c2b8a2; --outline:#6a5a4a; --label-muted:#8a7d6c;
   /* 칸 */
-  --tile-line:#3a2e26; --tile-a:.2; --tile-ours:#d9a441; --tile-gray:#bdb8ac; --tile-gray-line:#9c978a; --tile-neutral:#c9b48a;
+  --tile-line:#3a2e26; --tile-a:.2; --tile-ours:#d9a441; --tile-dark:#d6ccb6; --tile-gray:#bdb8ac; --tile-gray-line:#9c978a; --tile-neutral:#c9b48a;
   --attack:#d9363e; --erode:#9a6ae0; --glow:255, 200, 97;
   --gu-mapo:#3e7c8c; --gu-yongsan:#4e6e8e; --gu-jung:#8d78ad; --gu-yeongdeungpo:#b5523b; --gu-dongjak:#5e8a5a; --gu-gwanak:#9a6a5e;
   --gu-mapo-dark:#2a5a66; --gu-yongsan-dark:#34506e; --gu-jung-dark:#5e4a7e; --gu-yeongdeungpo-dark:#8c3e2c; --gu-dongjak-dark:#3e6a3e; --gu-gwanak-dark:#6e463c;
@@ -37,7 +37,7 @@
   --t-land:#14111c; --t-paper:rgba(255, 255, 255, .03); --t-river:#1e3a44; --t-river-edge:#3a6a74; --t-wave:#5d8f9b; --t-park:#1d2820;
   --t-bridge:#6b5638; --t-bam:#2f4a2c;
   --sealed:#1b1724; --sealed-line:#332b40; --outline:#8c7a5a; --label-muted:#7a7190;
-  --tile-line:#8c7a5a; --tile-a:.32; --tile-ours:#ffb547;
+  --tile-line:#8c7a5a; --tile-a:.32; --tile-ours:#ffb547; --tile-dark:#100d17;
   --label-bg:#0f0c14; --label-fg:#e9dfc8; --label-shadow:#000;
   --fog:#0a0712; --fog-a:.96; --map-bg:#0a0712;
   color-scheme:dark;
