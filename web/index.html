@@ -23,45 +23,62 @@
 <body>
 <div class="app" id="app">
   <header class="top">
+    <span class="brand">어둑시니</span>
     <button class="emblem" id="emblem" type="button" aria-label="우리 구 정보">
       <span class="mark" id="emblemMark" aria-hidden="true">등</span>
       <span class="emblem-text"><b id="guName">어둑시니</b><small id="guSub">둘러보는 중</small></span>
     </button>
-    <div class="gauge" aria-label="병력">
-      <span class="lbl">병력</span>
-      <span class="num" id="troops">-</span>
+    <div class="troops" aria-label="병력">
       <span class="bar" aria-hidden="true"><i id="troopBar"></i></span>
+      <span class="num troop-num" id="troops">-</span>
+      <span class="uchip" id="chipTorch">횃불 -</span>
+      <span class="uchip" id="chipLantern">등롱 -</span>
     </div>
     <div class="clock">
-      <span class="lbl" id="clockLbl">일몰까지</span>
-      <span class="num" id="clockVal">-</span>
+      <span class="lbl" id="clockLbl">해 지기까지</span>
+      <span class="num timer" id="clockVal">-</span>
     </div>
+    <button class="sq pc-only" id="btnSound" type="button" aria-label="소리 켜기">소리</button>
+    <button class="sq pc-only" id="btnMenuPc" type="button">메뉴</button>
   </header>
 
-  <button class="alert" id="alert" type="button" hidden></button>
+  <div class="body" id="body">
+    <main class="stage" id="stage">
+      <canvas id="map" aria-label="시범 전선 등불 지도. 칸을 누르면 자세히 봅니다. 우리 칸을 끌어 적 칸에 놓으면 진군합니다."></canvas>
+      <div class="warn" id="warn" hidden>
+        <div class="warn-text"><b id="warnTitle"></b><span id="warnSub"></span></div>
+        <button type="button" class="warn-btn" id="warnBtn">증원</button>
+      </div>
+      <p class="guide" id="guide"></p>
+      <button type="button" class="front" id="btnFront">우리 전선으로</button>
+      <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    </main>
 
-  <main class="stage" id="stage">
-    <canvas id="map" aria-label="시범 전선 등불 지도. 칸을 누르면 자세히 봅니다."></canvas>
-    <div class="nightinfo" id="nightInfo" hidden>
-      <p><b id="nightTitle">밤</b> <span class="num" id="nightNext"></span></p>
-      <p class="hint" id="nightWatch"></p>
-    </div>
-    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-  </main>
+    <aside class="panel" id="panel" aria-label="전황">
+      <section class="card"><h3>다가오는 공격 <span class="num" id="pnIncN">0</span></h3><ul class="plist" id="pnInc"></ul></section>
+      <section class="card"><h3>진행 중인 진군</h3><ul class="plist" id="pnMarch"></ul></section>
+      <section class="card"><h3>깃발이 많이 꽂힌 칸</h3><ul class="plist" id="pnFlags"></ul></section>
+      <section class="card"><h3>구 순위 · 살아남은 등불</h3><ul class="plist" id="pnRank"></ul></section>
+      <a class="chatbtn" id="pnChat" target="_blank" rel="noopener">오픈채팅 열기</a>
+    </aside>
+
+    <aside class="sheet" id="sheet" hidden aria-labelledby="sheetTitle">
+      <div class="sheet-head">
+        <h2 id="sheetTitle"></h2>
+        <button type="button" class="x" id="sheetClose" aria-label="닫기">✕</button>
+      </div>
+      <div class="sheet-body" id="sheetBody"></div>
+    </aside>
+  </div>
 
   <nav class="bottom">
-    <button type="button" id="btnMarch" class="act">진군</button>
-    <button type="button" id="btnReinforce" class="act">증원</button>
-    <button type="button" id="btnMenu" class="act">메뉴</button>
-  </nav>
-
-  <aside class="sheet" id="sheet" hidden aria-labelledby="sheetTitle">
-    <div class="sheet-head">
-      <h2 id="sheetTitle"></h2>
-      <button type="button" class="x" id="sheetClose" aria-label="닫기">✕</button>
+    <p class="flagline"><span class="tag" id="flagTag">깃발 최다</span><span id="flagText">아직 깃발이 없어요</span></p>
+    <div class="acts">
+      <button type="button" id="btnMarch" class="act primary">진군</button>
+      <button type="button" id="btnReinforce" class="act">증원</button>
+      <button type="button" id="btnMenu" class="act menu">메뉴<i class="badge" id="menuBadge" hidden></i></button>
     </div>
-    <div class="sheet-body" id="sheetBody"></div>
-  </aside>
+  </nav>
 </div>
 
 <!-- 온보딩: 세계관 3컷 → 구 고르기 → 등불지기 등록 → 홈 화면 추가 -->

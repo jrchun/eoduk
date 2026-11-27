@@ -1,5 +1,5 @@
 // 온보딩 세계관 3컷과 일출 리포트 공유 카드(Canvas). 색은 CSS 변수에서 읽는다.
-import { drawSprite } from './sprites.js';
+import { drawSprite, IMG, drawImageFoot } from './sprites.js';
 import { hexToPixel } from './rules.js';
 
 const v = (el, n) => getComputedStyle(el).getPropertyValue(n).trim();
@@ -10,13 +10,14 @@ export function drawStory(cv, i) {
   const g = cv.getContext('2d'), W = cv.width, H = cv.height, R = rng(i + 3);
   g.imageSmoothingEnabled = false;
   const sky = g.createLinearGradient(0, 0, 0, H);
-  if (i === 0) { sky.addColorStop(0, v(cv, '--night-veil').includes('0)') ? '#3a2f4a' : '#2a2438'); sky.addColorStop(0.6, v(cv, '--dusk')); sky.addColorStop(1, '#f0c27a'); }
+  if (i === 0) { sky.addColorStop(0, '#2a2438'); sky.addColorStop(0.6, v(cv, '--dusk')); sky.addColorStop(1, '#f0c27a'); }
   else if (i === 1) { sky.addColorStop(0, v(cv, '--map-bg')); sky.addColorStop(1, v(cv, '--sunk')); }
   else { sky.addColorStop(0, '#0d0e15'); sky.addColorStop(1, '#1d2030'); }
   g.fillStyle = sky; g.fillRect(0, 0, W, H);
   if (i === 0) { g.fillStyle = '#f6d27a'; g.beginPath(); g.arc(W * 0.7, H * 0.66, 26, Math.PI, 0); g.fill(); }
   // 땅: 헥스 한 줄
   const gus = ['--gu-mapo', '--gu-yongsan', '--gu-jung', '--gu-yeongdeungpo', '--gu-dongjak', '--gu-gwanak'];
+  const ink = v(cv, '--t-ink');
   for (let k = 0; k < 9; k++) {
     const x = 18 + k * 36, y = H - 34 + (k % 2) * 8;
     g.beginPath();
@@ -24,7 +25,7 @@ export function drawStory(cv, i) {
     g.closePath();
     const dark = i === 2 && k !== 4;
     g.fillStyle = dark ? '#2a2a30' : v(cv, gus[(k + i) % 6]); g.fill();
-    g.strokeStyle = v(cv, '--map-ink'); g.lineWidth = 2; g.stroke();
+    g.strokeStyle = ink; g.lineWidth = 2; g.stroke();
     if (!dark) drawSprite(g, 'lantern', x, y - 6, 2);
     else drawSprite(g, 'lanternOff', x, y - 6, 2);
   }
@@ -36,15 +37,21 @@ export function drawStory(cv, i) {
   if (i === 1) { // 진군선과 두 무리
     g.setLineDash([6, 5]); g.strokeStyle = v(cv, '--ours'); g.lineWidth = 3;
     g.beginPath(); g.moveTo(60, 120); g.lineTo(240, 96); g.stroke(); g.setLineDash([]);
-    drawSprite(g, 'walkA', 120, 100, 3, v(cv, '--ours')); drawSprite(g, 'walkB', 150, 96, 3, v(cv, '--ours'));
-    drawSprite(g, 'walkA', 250, 74, 3, v(cv, '--enemy'));
+    if (IMG['torch-ours'] && IMG['torch-enemy']) {
+      drawImageFoot(g, IMG['torch-ours'], 110, 128, 1); drawImageFoot(g, IMG['torch-ours'], 146, 124, 1);
+      drawImageFoot(g, IMG['torch-enemy'], 238, 100, 1, true);
+    } else {
+      drawSprite(g, 'walkA', 120, 100, 3, v(cv, '--ours')); drawSprite(g, 'walkB', 150, 96, 3, v(cv, '--ours'));
+      drawSprite(g, 'walkA', 250, 74, 3, v(cv, '--enemy'));
+    }
     drawSprite(g, 'flag', 268, 50, 3, v(cv, '--enemy'));
   }
   if (i === 2) { // 등불지기 하나, 둘레의 빛, 사방의 눈
     const rg = g.createRadialGradient(W / 2, H - 50, 4, W / 2, H - 50, 90);
     rg.addColorStop(0, 'rgba(255,214,120,.55)'); rg.addColorStop(1, 'rgba(255,214,120,0)');
     g.fillStyle = rg; g.fillRect(0, 0, W, H);
-    drawSprite(g, 'walkA', W / 2, H - 78, 4, v(cv, '--ours'));
+    if (IMG['lantern-ours']) drawImageFoot(g, IMG['lantern-ours'], W / 2, H - 40, 2);
+    else drawSprite(g, 'walkA', W / 2, H - 78, 4, v(cv, '--ours'));
     for (let k = 0; k < 5; k++) drawSprite(g, 'eye', 30 + R() * (W - 60), 20 + R() * 60, 2);
   }
 }

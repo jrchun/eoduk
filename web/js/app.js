@@ -5,6 +5,7 @@ import { TYPES, BAL, fmtLeft, fmtClock, attackPower, defensePower, phaseAt } fro
 import { indexMap, applyTiles, canAttack, bestSource, marchPreview, incoming, ownNeighborCount, troopsLocal, rankGus, countTiles, reportLine, shareText, josa, darkFront } from './view.js';
 import { MapView } from './map.js';
 import { drawStory, drawShareCard } from './story.js';
+import { loadImages } from './sprites.js';
 import { CHAT } from './links.js';
 
 const $ = id => document.getElementById(id);
@@ -104,86 +105,143 @@ function subscribeRealtime() {
 }
 
 // ---------- 그리기 ----------
+const isPC = () => window.innerWidth >= 1024;
+const torchRatio = () => { const v = parseFloat(store.get('torch')); return Number.isFinite(v) ? v : 0.7; };
 function render() {
   const g = S.game; if (!g) return;
-  document.documentElement.dataset.theme = g.phase.phase === 'day' ? 'day' : 'night';
+  const ph = g.phase.phase;
+  document.documentElement.dataset.theme = ph === 'day' ? 'day' : 'night';
   const gu = myGu();
   const inc = gu ? incoming(S.idx, g.marches, gu) : [];
   for (const m of inc) if (!S.incomingSeen.has(m.id)) { S.incomingSeen.add(m.id); beep(330, 0.25); }
+  const eroding = gu && ph === 'night' ? darkFront(S.idx, gu).map(c => c.id) : [];
+  const reinforced = gu ? [...S.idx.byId.values()].filter(c => c.owner === gu && c.defense > BAL.tileStart).sort((a, b) => b.defense - a.defense).slice(0, 3).map(c => c.id) : [];
   S.map.set({ marches: g.marches, myGu: gu, selected: S.selected, flags: g.flags || [], phase: g.phase,
-    incomingIds: new Set(inc.map(m => m.dst)), canMarch: !!gu && g.phase.phase === 'day' });
-  // 위: 구 문장
+    incomingIds: new Set(inc.map(m => m.dst)), erodingIds: new Set(eroding), reinforced: new Set(reinforced), canMarch: !!gu && ph === 'day' });
+  // 헤더: 구 문장 / 구 이름 등불지기 / 유형 · 등불 n칸 · n위
   const gg = gu ? guOf(gu) : null;
+  const counts = countTiles(S.idx), ranked = rankGus([...S.idx.gu.values()], counts);
   $('emblemMark').textContent = gg ? gg.short[0] : '등';
-  $('emblemMark').style.background = gg ? `var(--gu-${gg.id})` : 'var(--ours)';
-  $('guName').textContent = gg ? gg.name : '어둑시니';
-  const counts = countTiles(S.idx);
-  $('guSub').textContent = gg ? `등불 ${counts[gu] || 0}칸 · ${me().nickname}` : (S.session ? '구를 골라 주세요' : '둘러보는 중');
-  $('btnMarch').disabled = !gu || g.phase.phase !== 'day';
-  $('btnReinforce').disabled = !gu || g.phase.phase === 'seal';
+  $('guName').textContent = gg ? `${gg.name} 등불지기` : '어둑시니';
+  $('guSub').textContent = gg ? `${TYPES[gg.type].name} · 등불 ${counts[gu] || 0}칸 · ${ranked.findIndex(x => x.id === gu) + 1}위`
+    : (S.session ? '구를 골라 주세요' : '둘러보는 중 · 시범 전선 6개 구');
+  // 아래 줄
+  const bm = $('btnMarch');
+  bm.textContent = ph === 'day' ? '진군' : ph === 'night' ? '밤에는 진군 불가' : '봉인 중';
+  bm.disabled = !gu || ph !== 'day';
+  $('btnReinforce').disabled = !gu || ph === 'seal';
+  if (ph === 'day') {
+    const top = (g.flags || [])[0];
+    $('flagTag').textContent = '깃발 최다';
+    $('flagText').textContent = top ? `${S.idx.byId.get(top[0]).name} 칸 · 깃발 ${top[1]}개` : (gu ? '칸을 눌러 깃발을 꽂아 목표를 정해요' : '아직 깃발이 없어요');
+  } else { $('flagTag').textContent = '증원했다면'; $('flagText').textContent = '화면을 끄는 것도 전략이에요'; }
+  $('menuBadge').hidden = !inc.length;
+  $('btnSound').textContent = S.sound ? '소리 끔' : '소리';
+  $('btnSound').setAttribute('aria-label', S.sound ? '소리 끄기' : '소리 켜기');
+  renderPanel(inc, ranked);
   if (S.sheet?.live) S.sheet.live();
   tick();
 }
 
-// 0.5초마다: 시계, 병력, 공격 경고, 탭 제목, 밤 정보
+// PC 오른쪽 패널 5개 카드
+function renderPanel(inc, ranked) {
+  const g = S.game, gu = myGu(), t = now();
+  const li = (...k) => h('li', {}, ...k), empty = text => h('li', { class: 'empty' }, text);
+  const cd = (iso, ours) => h('span', { class: 'cd' + (ours ? ' ours' : ''), 'data-arrive': iso }, fmtLeft(Date.parse(iso) - t));
+  $('pnIncN').textContent = inc.length;
+  $('pnInc').replaceChildren(...(inc.length ? inc.map(m => {
+    const c = S.idx.byId.get(m.dst), need = shortfall(m, c);
+    const b = h('button', { class: 'btn' + (need > 0 ? ' danger' : ''), type: 'button', onclick: () => { S.map.focus(c.id); openReinforce(c.id); } }, '증원');
+    return li(h('span', {}, h('b', {}, `${guOf(m.gu).short} ${m.troops} → ${c.name}`), h('br'), h('small', {}, `수비 ${c.defense} · ${need > 0 ? need + ' 부족' : '막을 수 있음'}`)),
+      h('span', { style: 'display:flex;flex-direction:column;align-items:flex-end;gap:4px' }, cd(m.arrive_at), b));
+  }) : [empty(gu ? '지금은 조용합니다.' : '구를 고르면 보입니다.')]));
+  const mine = (g.marches || []).filter(m => m.gu === gu && gu);
+  $('pnMarch').replaceChildren(...(mine.length ? mine.map(m => {
+    const joined = mine.filter(x => x.dst === m.dst).length;
+    return li(h('span', {}, h('b', {}, `${S.idx.byId.get(m.src).name} → ${S.idx.byId.get(m.dst).name}`), h('br'),
+      h('small', {}, `횃불꾼 ${Math.round(m.troops * m.torch)}` + (joined > 1 ? ` · ${joined}명 합류` : ''))), cd(m.arrive_at, true));
+  }) : [empty('진군 중인 무리가 없습니다.')]));
+  const flags = g.flags || [];
+  $('pnFlags').replaceChildren(...(flags.length ? flags.map(([id, n]) => li(h('b', {}, S.idx.byId.get(id).name), h('span', {}, `깃발 ${n}개`)))
+    : [empty(gu ? '아직 없어요. 칸을 눌러 깃발을 꽂아요.' : '구를 고르면 보입니다.')]));
+  $('pnRank').replaceChildren(...ranked.map((x, i) => { const el = li(h('span', {}, `${i + 1}. ${x.name}`), h('span', { class: 'num' }, `${x.tiles}칸`)); if (x.id === gu) el.className = 'me'; return el; }));
+  const chat = $('pnChat');
+  if (gu && CHAT[gu]) { chat.href = CHAT[gu]; chat.textContent = `${guOf(gu).name} 오픈채팅 열기`; chat.removeAttribute('aria-disabled'); }
+  else { chat.removeAttribute('href'); chat.setAttribute('aria-disabled', 'true'); chat.textContent = gu ? `${guOf(gu).name} 오픈채팅 준비 중` : '오픈채팅'; }
+}
+// 막으려면 더 쌓아야 할 수비(운이 가장 나쁜 1.1배 기준). 0 이하면 막을 수 있다.
+function shortfall(m, c) {
+  const opts = { ownNeighbors: ownNeighborCount(S.idx, c.id, c.owner), type: guOf(c.owner).type, bridge: c.kind === 'bridge' };
+  const atk = attackPower(m.troops, m.torch, guOf(m.gu).type) * 1.1, def = defensePower(c.defense, opts), unit = defensePower(1, opts);
+  return Math.ceil((atk - def) / unit);
+}
+
+// 0.5초마다: 시계, 병력, 경고 카드, 안내 칩, 탭 제목
 function tick() {
   const g = S.game; if (!g) return;
   const t = now(), ph = g.phase;
   let lbl, val;
-  if (ph.phase === 'day') { lbl = ph.rush ? '마지막 러시' : '일몰까지'; val = fmtLeft(Date.parse(ph.sunset) - t); }
+  if (ph.phase === 'day') { lbl = ph.rush ? '마지막 러시' : '해 지기까지'; val = fmtLeft(Date.parse(ph.sunset) - t); }
   else if (ph.phase === 'night') { lbl = ph.long_night ? '긴 밤 · 봉인까지' : '봉인까지'; val = fmtLeft(Date.parse(ph.midnight) - t); }
-  else { lbl = '일출까지'; val = fmtLeft(Date.parse(ph.sunrise) + 86400000 * (Date.parse(ph.sunrise) < t ? 1 : 0) - t); }
+  else { lbl = '해 뜨기까지'; val = fmtLeft(Date.parse(ph.sunrise) - t); }
   $('clockLbl').textContent = lbl; $('clockVal').textContent = val;
   const m = me();
   if (m?.active) {
-    const n = troopsLocal(m.troops, m.rate, S.fetchedAt, t);
+    const n = troopsLocal(m.troops, m.rate, S.fetchedAt, t), torch = Math.round(n * torchRatio());
     $('troops').textContent = `${n}/${BAL.troopCap}`;
     $('troopBar').style.width = (n / BAL.troopCap * 100) + '%';
-  } else { $('troops').textContent = '-'; $('troopBar').style.width = '0'; }
+    $('chipTorch').textContent = `횃불 ${torch}`; $('chipLantern').textContent = `등롱 ${n - torch}`;
+  } else { $('troops').textContent = '-'; $('troopBar').style.width = '0'; $('chipTorch').textContent = '횃불 -'; $('chipLantern').textContent = '등롱 -'; }
   const gu = myGu();
   const inc = gu ? incoming(S.idx, g.marches, gu) : [];
-  const al = $('alert');
-  if (inc.length) {
-    const a = inc[0], dst = S.idx.byId.get(a.dst), left = fmtLeft(Date.parse(a.arrive_at) - t);
-    al.hidden = false;
-    al.textContent = `공격! ${dst.name} ← ${guOf(a.gu).short} ${a.troops}명 · ${left} 뒤 도착` + (inc.length > 1 ? ` (외 ${inc.length - 1})` : '');
-    al.dataset.tile = a.dst;
+  const warn = $('warn');
+  let target = null;
+  warn.classList.toggle('night', ph.phase === 'night');
+  if (ph.phase === 'day' && inc.length) {
+    const a = inc[0], c = S.idx.byId.get(a.dst), left = fmtLeft(Date.parse(a.arrive_at) - t);
+    target = c.id;
+    $('warnTitle').textContent = `${guOf(a.gu).short} 횃불꾼 ${Math.round(a.troops * a.torch)} → ${c.name}` + (inc.length > 1 ? ` 외 ${inc.length - 1}` : '');
+    $('warnSub').textContent = `수비 ${c.defense} · ${left} 후 도착`;
     document.title = `(${left}) 공격받는 중 · 어둑시니`;
-  } else { al.hidden = true; document.title = '어둑시니'; }
-  // 밤 정보
-  const ni = $('nightInfo');
-  if (ph.phase !== 'day') {
-    ni.hidden = !!S.sheet && window.innerWidth < 900;
-    if (ph.phase === 'night') {
-      $('nightTitle').textContent = ph.long_night ? '긴 밤 — 어둑시니가 깨어났다' : '밤 — 어둑시니가 깨어났다';
-      $('nightNext').textContent = ph.tick < 8 ? `다음 침식 ${fmtLeft(Date.parse(ph.next_tick) - t)} (${ph.tick}/8)` : '';
-    } else { $('nightTitle').textContent = '봉인 — 어둠도 잠든 시간'; $('nightNext').textContent = ''; }
-    const sel = S.selected && S.idx.byId.get(S.selected);
-    $('nightWatch').textContent = ph.phase === 'night'
-      ? (sel ? `지금 '${sel.name}'을 보는 사람 ${S.watchers}명 · 많이 볼수록 어둠이 세진다` : '증원만 할 수 있다. 오래 들여다보면 어둠이 커진다. 증원하고 화면을 꺼라.')
-      : '자정부터 일출까지는 휴전. 해가 뜨면 잿빛 칸을 두고 쟁탈이 시작된다.';
-  } else ni.hidden = true;
+  } else {
+    document.title = '어둑시니';
+    if (ph.phase === 'night' && gu) {
+      const c = darkFront(S.idx, gu).sort((x, y) => x.defense - y.defense)[0];
+      if (c) {
+        target = c.id;
+        $('warnTitle').textContent = `어둠이 ${c.name} 칸에 닿았어요`;
+        $('warnSub').textContent = `수비 ${c.defense} · ` + (ph.tick < 8 ? `다음 침식 ${fmtLeft(Date.parse(ph.next_tick) - t)}` : '오늘 밤 침식 끝');
+      }
+    }
+  }
+  warn.dataset.tile = target || '';
+  warn.hidden = !target || (!!S.sheet && !isPC());
+  $('guide').textContent = ph.phase === 'night' ? `지금 이 칸을 보는 사람 ${S.watchers}명 · 많이 볼수록 어둠이 커져요`
+    : ph.phase === 'seal' ? '봉인 — 해가 뜨면 잿빛 칸 쟁탈이 시작돼요'
+    : isPC() ? '우리 칸을 끌어서 적 칸에 놓으면 진군 · 칸에 깃발을 꽂아 목표 표시' : '안개 너머는 정찰 전까지 보이지 않아요';
+  $('guide').hidden = !!S.sheet && !isPC();
+  $('btnFront').hidden = !!S.sheet && !isPC();
 }
 
 // ---------- 시트 ----------
 function openSheet(title, body, live) {
   $('sheetTitle').textContent = title;
   $('sheetBody').replaceChildren(...[].concat(body).filter(Boolean));
-  $('sheet').hidden = false; $('app').classList.add('has-sheet');
+  $('sheet').hidden = false;
   S.sheet = { title, live };
-  setTimeout(() => { S.map.resize(); fitToSheet(); }, 0);
+  tick();
+  setTimeout(fitToSheet, 0);
 }
 // 폰: 시트가 가린 만큼 지도를 위로 올리고, 고른 칸을 크게 보여 준다
 function fitToSheet() {
-  const mobile = window.innerWidth < 900 && S.sheet;
+  const mobile = !isPC() && S.sheet;
   S.map.setInset(mobile ? $('sheet').offsetHeight - document.querySelector('.bottom').offsetHeight : 0);
-  if (mobile && S.selected) S.map.focus(S.selected); else S.map.clampPan();
+  if (mobile && S.selected) S.map.focus(S.selected); else S.map.clamp();
 }
 function closeSheet() {
-  $('sheet').hidden = true; $('app').classList.remove('has-sheet'); S.sheet = null;
+  $('sheet').hidden = true; S.sheet = null;
   S.selected = null; S.map.set({ selected: null }); watchNow();
-  S.map.setInset(0); S.map.setZoom(1);
-  setTimeout(() => S.map.resize(), 0);
+  S.map.setInset(0); tick();
 }
 $('sheetClose').addEventListener('click', closeSheet);
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.sheet) closeSheet(); });
@@ -239,7 +297,7 @@ function openMarch(dstId, srcId) {
   const have = troopsLocal(me().troops, me().rate, S.fetchedAt, now());
   if (have < 1) { toast('병력이 없습니다. 시간이 지나면 쌓입니다.'); return; }
   const nIn = h('input', { type: 'range', min: 1, max: have, value: Math.min(have, Math.max(1, Math.ceil(have * 0.8))), id: 'mN' });
-  const rIn = h('input', { type: 'range', min: 0, max: 100, step: 10, value: 70, id: 'mR' });
+  const rIn = h('input', { type: 'range', min: 0, max: 100, step: 10, value: Math.round(torchRatio() * 100), id: 'mR' });
   const nOut = h('span', { class: 'num' }), rOut = h('span', {}), info = h('div', { class: 'box' });
   const go = h('button', { class: 'btn primary', type: 'button' }, '진군 보내기');
   const upd = () => {
@@ -264,6 +322,7 @@ function openMarch(dstId, srcId) {
   go.addEventListener('click', async () => {
     go.disabled = true;
     try {
+      store.set('torch', String(+rIn.value / 100));
       const r = await rpc('send_march', { src, dst: dstId, n: +nIn.value, torch: +rIn.value / 100 });
       toast(`진군 출발! ${fmtClock(Date.parse(r.arrive_at))} 도착`); beep(660); closeSheet(); refresh();
     } catch (e) { toast(e.message); go.disabled = false; }
@@ -321,8 +380,15 @@ $('btnReinforce').addEventListener('click', () => {
   if (pick) { S.map.focus(pick); return openReinforce(pick); }
   toast('증원할 우리 칸을 지도에서 누르세요.');
 });
-$('alert').addEventListener('click', () => { const id = +$('alert').dataset.tile; if (id) { S.map.focus(id); openTile(id); } });
+$('warn').addEventListener('click', e => {
+  const id = +$('warn').dataset.tile; if (!id) return;
+  S.map.focus(id);
+  if (e.target.closest('#warnBtn')) openReinforce(id); else openTile(id);
+});
+$('btnFront').addEventListener('click', () => S.map.home());
 $('btnMenu').addEventListener('click', openMenu);
+$('btnMenuPc').addEventListener('click', openMenu);
+$('btnSound').addEventListener('click', () => { S.sound = !S.sound; store.set('sound', S.sound ? '1' : '0'); beep(); render(); });
 $('emblem').addEventListener('click', () => (S.session ? openRanking() : showOnboard('story')));
 
 function openMenu() {
@@ -524,7 +590,7 @@ function loop() { S.map.render(now()); raf = requestAnimationFrame(loop); }
 setInterval(() => { if (S.game) { tick(); document.querySelectorAll('[data-arrive]').forEach(el => { el.textContent = fmtLeft(Date.parse(el.dataset.arrive) - now()); }); } }, 500);
 
 async function start() {
-  const map = await (await fetch('data/map.json')).json();
+  const [map] = await Promise.all([(await fetch('data/map.json')).json(), loadImages()]);
   S.idx = indexMap(map);
   // 시작 전 지도: 칸 중심이 속한 구가 주인
   for (const c of S.idx.byId.values()) if (c.kind === 'land') { c.owner = c.gu; c.defense = BAL.tileStart; }
@@ -534,7 +600,7 @@ async function start() {
   });
   document.documentElement.dataset.theme = phaseAt(Date.now()).phase === 'day' ? 'day' : 'night';
   loop();
-  if (location.hostname === 'localhost') window.eodukDebug = { S, openTile, openMarch }; // 로컬 시험용
+  if (location.hostname === 'localhost') window.eodukDebug = { S, openTile, openMarch, render }; // 로컬 시험용
   const { data } = await sb.auth.getSession();
   S.session = data.session;
   await refresh();
