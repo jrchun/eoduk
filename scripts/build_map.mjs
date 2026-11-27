@@ -47,6 +47,14 @@ export const SEALED = {
   '강동구': { id: 'gangdong', short: '강동', type: 'river', side: 's', symbol: '암사 빗살무늬' },
 };
 
+// 산(지형 높이, 화면에서만 쓴다. 게임 규칙과 무관). [이름, [경도, 위도], 높이 km, 퍼짐 반경 km]. 높이는 실제 해발(대략)
+const PEAKS = [
+  ['북한산', [126.9778, 37.6586], 0.836, 2.6], ['도봉산', [127.0153, 37.6989], 0.74, 1.9], ['수락산', [127.0819, 37.6981], 0.64, 1.6],
+  ['불암산', [127.0861, 37.6550], 0.51, 1.1], ['북악산', [126.9725, 37.5936], 0.34, 0.9], ['인왕산', [126.9578, 37.5850], 0.34, 0.8],
+  ['안산', [126.9450, 37.5747], 0.30, 0.6], ['남산', [126.9883, 37.5512], 0.26, 0.85], ['관악산', [126.9636, 37.4450], 0.63, 1.9],
+  ['우면산', [127.0047, 37.4700], 0.29, 0.9], ['청계산', [127.0539, 37.4228], 0.62, 1.6], ['대모산', [127.0825, 37.4797], 0.29, 0.8],
+  ['아차산', [127.1031, 37.5594], 0.29, 0.8], ['봉산', [126.9011, 37.6097], 0.21, 0.8], ['개화산', [126.8072, 37.5786], 0.13, 0.6],
+];
 const SIZE = 0.635; // km, 꼭짓점까지 거리(폭 = √3 × 0.635 ≈ 1.1km)
 const LAT0 = 37.53, LNG0 = 126.95;
 const KX = Math.cos(LAT0 * Math.PI / 180) * 111.32, KY = 110.574;
@@ -203,6 +211,7 @@ export function buildMap() {
     bridges: BRIDGES.map(([name, ll]) => { const t = list.find(c => c.name === name); return { name, at: t.saetBridge ? [t.x, t.y] : km(ll), saet: !!t.saetBridge }; }),
     sprites: SPRITES.map(([key, ll]) => ({ key, at: km(ll), tile: tileAt(ll) })),
     bamseom: km(BAMSEOM),
+    peaks: PEAKS.map(([name, ll, h, r]) => ({ name, at: km(ll), h, r })),
     // 샛강 물길(화면에 가는 강으로 그린다): 샛강 칸 중심을 서→동으로
     saetgang: list.filter(c => c.saet).sort((a, b) => (a.x - a.y) - (b.x - b.y)).map(c => [c.x, c.y]),
     riverFull: riverFullKm.map(([x, y]) => [+x.toFixed(3), +y.toFixed(3)]),
@@ -217,7 +226,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     ...Object.entries(SEALED).map(([full, g]) => ({ ...g, name: full, open: false }))];
   const sealed = buildSealed(m.list);
   mkdirSync(ROOT + 'web/data', { recursive: true });
-  writeFileSync(ROOT + 'web/data/map.json', JSON.stringify({ size: m.size, river: m.riverFull, saetgang: m.saetgang, bridges: m.bridges, sprites: m.sprites, bamseom: m.bamseom, gu: gus, tiles: [...m.list, ...sealed] }) + '\n');
+  writeFileSync(ROOT + 'web/data/map.json', JSON.stringify({ size: m.size, river: m.riverFull, saetgang: m.saetgang, bridges: m.bridges, sprites: m.sprites, bamseom: m.bamseom, peaks: m.peaks, gu: gus, tiles: [...m.list, ...sealed] }) + '\n');
   const rows = m.list.map(c => `(${c.id},${c.q},${c.r},${sqlStr(c.kind)},${sqlStr(c.gu)},${sqlStr(c.name)},${c.edge},${!!c.landmark},${sqlStr(c.hall || null)},${sqlStr(c.effect || null)})`);
   const guRows = gus.map(g => `(${sqlStr(g.id)},${sqlStr(g.name)},${sqlStr(g.short)},${sqlStr(g.type)},${sqlStr(g.side)},${g.open})`);
   writeFileSync(ROOT + 'supabase/seed.sql', `-- scripts/build_map.mjs가 만든 파일(손으로 고치지 않는다). 칸 ${m.list.length}개.

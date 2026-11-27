@@ -1,7 +1,7 @@
 // 지도 그리기(Canvas 2D) — 서울 전역 쿼터뷰.
 // 평면 좌표(km, map.json의 x = 동쪽, y = 남쪽)를 북쪽이 위인 익숙한 지도 방향으로 그린다.
 // HD-2D 쿼터뷰: 남쪽에서 북쪽을 비스듬히 내려다본다. X = x·0.85, Y = y·0.46(세로를 눌러 기울임). 한강이 서→동으로 가로로 흐른다.
-// 땅은 두께가 있는 판(바깥·강 쪽 절벽), 불 켜진 칸은 살짝 솟는다(lift). 화면 위아래 흐림·비네트는 styles.css .tiltshift.
+// 땅은 두께가 있는 판(바깥·강 쪽 절벽). 산(map.json peaks: 북한산·남산·관악산 등)은 칸이 계단처럼 솟고, 불 켜진 칸은 그 위로 조금 더 솟는다(lift). 화면 위아래 흐림·비네트는 styles.css .tiltshift.
 // 보이는 순서(먼저 읽혀야 할 것부터): 서울 모양 → 구(이름) → 점령 상태(색·경계) → 움직임(진군·경고) → 칸 이름(확대했을 때만)
 // 그리는 순서: 바탕 → 칸 색 → 한강(벡터) → 경계선 → 유닛 → 안개 → 경고 테두리·이름·알약
 // 색은 styles.css의 CSS 변수(--t-*, --tile-*, --gu-*, --sealed*, --label-*, --pill-*, --fog*)에서 읽는다.
@@ -14,16 +14,18 @@ const LOW = 4;
 const A = 0.85, B = 0, C = 0, D = 0.46, DET = A * D - B * C;
 const fx = (x, y) => A * x + B * y, fy = (x, y) => C * x + D * y;
 const inv = (X, Y) => ({ x: (D * X - B * Y) / DET, y: (A * Y - C * X) / DET });
-const depth = (x, y) => fy(x, y); // 그리는 순서(화면 아래쪽일수록 나중)
+const depth = (x, y) => fy(x, y);
+const ELEV = 2.2; // 산 높이를 화면 px로 바꾸는 배율(√(높이km × 0.35) × cam.s × 2.2, 세로를 과장) // 그리는 순서(화면 아래쪽일수록 나중)
 const CORNER = [...Array(6)].map((_, i) => { const a = Math.PI / 180 * (60 * i - 30); return [Math.cos(a), Math.sin(a)]; });
 // 이웃 방향(rules.js DIRS 순서) → 그 쪽 변의 꼭짓점 번호
 const SOUTH = [[0, 1], [-1, 1]]; // 화면 아래쪽을 보는 두 변(옆면이 보이는 쪽)
 const EDGE_OF_DIR = { '1,0': [0, 1], '-1,0': [3, 4], '0,1': [1, 2], '0,-1': [4, 5], '1,-1': [5, 0], '-1,1': [2, 3] };
-const VARS = ['--t-hi', '--t-land', '--t-river', '--t-river-edge', '--t-wave', '--t-park', '--t-ink', '--t-bridge', '--t-bam', '--t-paper',
+const VARS = ['--t-hi', '--t-mount', '--t-land', '--t-river', '--t-river-edge', '--t-wave', '--t-park', '--t-ink', '--t-bridge', '--t-bam', '--t-paper',
   '--tile-line', '--tile-a', '--tile-ours', '--tile-dark', '--tile-gray', '--tile-gray-line', '--tile-neutral', '--sealed', '--sealed-line', '--outline',
   '--ours-dark', '--attack', '--erode', '--label-bg', '--label-fg', '--label-muted', '--label-shadow', '--pill-enemy', '--pill-ours', '--pill-fg',
   '--fog', '--fog-a', '--cloud-line', '--cloud-fill', '--eyes', '--glow', '--fg', '--ours', '--enemy'];
 
+function inPoly(x, y, pts) { let on = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const a = pts[i], b = pts[j]; if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) on = !on; } return on; }
 // 색 a를 바탕색 b와 비율 t로 섞은 불투명 색(반투명 칸이 겹쳐 생기는 진한 이음매를 없앤다)
 function mix(a, b, t) { const x = hex2rgb(a), y = hex2rgb(b); return `rgb(${x.map((v, i) => Math.round(v * t + y[i] * (1 - t))).join(',')})`; }
 function hex2rgb(h) { const m = /^#?([0-9a-f]{6})$/i.exec((h || '').trim()); const n = m ? parseInt(m[1], 16) : 0; return [n >> 16, (n >> 8) & 255, n & 255]; }
@@ -81,11 +83,25 @@ export class MapView {
     return { x: this.cam.x + p.x, y: this.cam.y + p.y };
   }
   // 불 켜진 칸이 솟는 높이(px). 점령 상태가 높이로도 읽히게
-  lift(c) { return !c || c.kind === 'river' || c.sealed || !c.owner ? 0 : Math.max(3, Math.min(12, this.cam.s * 0.08)); }
+  // 칸 윗면 높이(px) = 지형(산, 세로 과장 약 3.5배) + 불 켜진 칸이 솟는 만큼
+  lift(c) {
+    if (!c || c.kind === 'river') return 0;
+    const own = !c.sealed && c.owner ? Math.max(3, Math.min(12, this.cam.s * 0.08)) : 0;
+    return Math.sqrt((c.elev || 0) * 0.35) * this.cam.s * ELEV + own; // 제곱근: 낮은 남산은 도드라지게, 높은 북한산은 덜 치솟게
+  }
   slab() { return Math.max(3, Math.min(16, this.cam.s * 0.13)); } // 땅 판 두께(px)
   center(c) { const p = this.project(c.x, c.y); p.y -= this.lift(c); return p; }
+  // 누른 곳의 칸: 솟은 칸은 화면에서 위로 올라가 있으므로, 솟은 윗면 안에 점이 드는 칸 중 가장 앞(남쪽) 칸
   tileAt(X, Y) {
-    const p = this.unproject(X, Y), h = pixelToHex(p.x, p.y, this.idx.size);
+    const p = this.unproject(X, Y), s = this.cam.s, reach = (0.6 * s * ELEV + 14) / (s * D) + this.idx.size;
+    let best = null, bd = -1e9;
+    for (const c of this.tiles) {
+      if (Math.abs(c.x - p.x) > this.idx.size * 1.2 || c.y < p.y - this.idx.size * 1.2 || c.y > p.y + reach) continue;
+      const up = this.lift(c), pts = CORNER.map(([cx, cy]) => { const q = this.project(c.x + cx * this.idx.size, c.y + cy * this.idx.size); q.y -= up; return q; });
+      if (inPoly(X, Y, pts) && depth(c.x, c.y) > bd) { bd = depth(c.x, c.y); best = c; }
+    }
+    if (best) return best.id;
+    const h = pixelToHex(p.x, p.y, this.idx.size);
     return this.idx.byKey.get(key(h.q, h.r))?.id ?? null;
   }
   hexW() { return this.cam.s * this.idx.size * 1.9; }
@@ -265,6 +281,7 @@ export class MapView {
       const fill = c.sealed ? this.css('--sealed') : c.gray ? col('gray', this.css('--tile-gray'), 0.8) : !c.owner ? this.css('--tile-dark')
         : c.owner === gu ? col('ours', this.css('--tile-ours'), tileA + 0.22) : col(c.owner, this.css('--gu-' + c.owner), tileA + 0.1);
       const L = this.lift(c);
+      const mt = c.elev ? Math.round(Math.min(1, c.elev / 0.45) * (c.owner ? 3 : 7)) : 0; // 산 칸은 높을수록 산빛(초록)으로, 불 켜진 칸은 조금만
       for (const [dq, dr] of SOUTH) {
         const n = idx.byKey.get(key(c.q + dq, c.r + dr));
         const bottom = !n || n.kind === 'river' ? -T : this.lift(n);
@@ -275,7 +292,8 @@ export class MapView {
         g.fillStyle = ink; g.globalAlpha = dq === 0 ? 0.42 : 0.3; g.fill(); g.globalAlpha = 1; // 빛은 왼쪽 위에서: 오른쪽 아래 면이 더 어둡다
       }
       this.hexScreen(c, 1.02, L); g.fillStyle = fill; g.fill();
-      if (this.hexW() >= 22) { // 윗면 북쪽 두 변에 빛 테두리(빛은 북서쪽 위에서)
+      if (mt) { g.fillStyle = this.css('--t-mount'); g.globalAlpha = mt / 10; g.fill(); g.globalAlpha = 1; }
+      if (this.hexW() >= 22 || c.elev) { // 윗면 북쪽 두 변에 빛 테두리(빛은 북서쪽 위에서)
         const [a1, b1] = this.edge(c, 0, -1, L), [, b2] = this.edge(c, 1, -1, L);
         g.beginPath(); g.moveTo(a1.x, a1.y); g.lineTo(b1.x, b1.y); g.lineTo(b2.x, b2.y);
         g.strokeStyle = this.css('--t-hi'); g.globalAlpha = night ? 0.08 : 0.4; g.lineWidth = 1.2; g.stroke(); g.globalAlpha = 1;

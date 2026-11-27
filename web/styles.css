@@ -21,14 +21,14 @@
   --gu-mapo:#3e7c8c; --gu-yongsan:#4e6e8e; --gu-jung:#8d78ad; --gu-yeongdeungpo:#b5523b; --gu-dongjak:#5e8a5a; --gu-gwanak:#9a6a5e;
   --gu-mapo-dark:#2a5a66; --gu-yongsan-dark:#34506e; --gu-jung-dark:#5e4a7e; --gu-yeongdeungpo-dark:#8c3e2c; --gu-dongjak-dark:#3e6a3e; --gu-gwanak-dark:#6e463c;
   --label-bg:#f6efdf; --label-fg:#2b2420; --label-shadow:#2b2420; --pill-enemy:#c23a32; --pill-ours:#a87c2e; --pill-fg:#ffffff;
-  --t-hi:#fffaf0; --vignette:rgba(70, 50, 25, .28); --haze:rgba(239, 230, 210, .35);
+  --t-hi:#fffaf0; --t-mount:#7f9a64; --vignette:rgba(70, 50, 25, .28); --haze:rgba(239, 230, 210, .35);
   --fog:#efe6d2; --fog-a:.93; --cloud-line:#5a4636; --cloud-fill:#f6efdf; --map-bg:#efe6d2; --dusk:#d9773a;
   --serif:"Gowun Batang", "AppleMyungjo", serif;
   --sans:"Gowun Dodum", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   color-scheme:light;
 }
 [data-theme="night"]{
-  --t-hi:#f3e6c8; --vignette:rgba(0, 0, 0, .55); --haze:rgba(15, 12, 20, .25);
+  --t-hi:#f3e6c8; --t-mount:#3c5236; --vignette:rgba(0, 0, 0, .55); --haze:rgba(15, 12, 20, .25);
   --bg:#0f0c14; --surface:#1a1420; --sunk:#120e18; --line:#8c7a5a; --fg:#e9dfc8; --muted:#a99c86;
   --accent:#ffb547; --ours:#ffb547; --ours-dark:#a87c2e; --on-ours:#1a1206; --enemy:#d0664c; --danger:#c23a32; --on-danger:#ffffff;
   --timer:#4fe3c1; --ok:#79b07a; --bad:#e0745a;
