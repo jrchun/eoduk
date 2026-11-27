@@ -47,10 +47,10 @@
       <canvas id="map" aria-label="시범 전선 등불 지도. 칸을 누르면 자세히 볼 수 있어요. 우리 칸을 끌어 적 칸에 놓으면 진군해요."></canvas>
       <div class="warn" id="warn" hidden>
         <div class="warn-text"><b id="warnTitle"></b><span id="warnSub"></span></div>
-        <button type="button" class="warn-btn" id="warnBtn">증원</button>
+        <button type="button" class="warn-btn" id="warnBtn"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5.5c0 4.5-3 7.6-7 9.5-4-1.9-7-5-7-9.5V6z"/><path d="M12 8.5v7M8.5 12h7"/></svg><span>증원</span></button>
       </div>
       <p class="guide" id="guide"></p>
-      <button type="button" class="front" id="btnFront">우리 전선으로</button>
+      <button type="button" class="front" id="btnFront"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/></svg><span id="frontLbl">우리 전선으로</span></button>
       <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
     </main>
 
@@ -72,11 +72,11 @@
   </div>
 
   <nav class="bottom">
-    <p class="flagline"><span class="tag" id="flagTag">깃발 최다</span><span id="flagText">아직 깃발이 없어요</span></p>
+    <p class="flagline"><span class="tag"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4"/><path d="M6 4h10l-2 3.5L16 11H6"/></svg><span id="flagTag">깃발 최다</span></span><span id="flagText">아직 깃발이 없어요</span></p>
     <div class="acts">
-      <button type="button" id="btnMarch" class="act primary">진군</button>
-      <button type="button" id="btnReinforce" class="act">증원</button>
-      <button type="button" id="btnMenu" class="act menu">메뉴<i class="badge" id="menuBadge" hidden></i></button>
+      <button type="button" id="btnMarch" class="act primary"><svg class="ico ico-day" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V4"/><path d="M5 4h11l-2.5 3.5L16 11H5"/></svg><svg class="ico ico-night" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/></svg><span id="marchLbl">진군</span></button>
+      <button type="button" id="btnReinforce" class="act"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5.5c0 4.5-3 7.6-7 9.5-4-1.9-7-5-7-9.5V6z"/><path d="M12 8.5v7M8.5 12h7"/></svg><span>증원</span></button>
+      <button type="button" id="btnMenu" class="act menu" aria-label="메뉴"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><i class="badge" id="menuBadge" hidden></i></button>
     </div>
   </nav>
 </div>

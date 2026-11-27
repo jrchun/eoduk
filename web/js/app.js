@@ -132,7 +132,8 @@ function render() {
   $('btnJoin').textContent = S.session ? '구 고르기' : '참여하기';
   // 아래 줄
   const bm = $('btnMarch');
-  bm.textContent = ph === 'day' ? '진군' : ph === 'night' ? '밤에는 진군 불가' : '봉인 중';
+  $('marchLbl').textContent = ph === 'day' ? '진군' : ph === 'night' ? '밤엔 쉬어요' : '봉인 중';
+  bm.classList.toggle('night', ph !== 'day');
   bm.disabled = !gu || ph !== 'day';
   $('btnReinforce').disabled = !gu || ph === 'seal';
   if (ph === 'day') {
@@ -409,7 +410,7 @@ $('warn').addEventListener('click', e => {
   if (e.target.closest('#warnBtn')) openReinforce(id); else openTile(id);
 });
 // 둘러보는 중: 시범 전선 ↔ 서울 전체, 구가 있으면: 우리 전선으로
-function frontLabel() { $('btnFront').textContent = myGu() ? '우리 전선으로' : S.map.view === 'open' ? '서울 전체' : '시범 전선'; }
+function frontLabel() { $('frontLbl').textContent = myGu() ? '우리 전선으로' : S.map.view === 'open' ? '서울 전체' : '시범 전선'; }
 $('btnFront').addEventListener('click', () => {
   if (!myGu() && S.map.view === 'open') S.map.fitAll(); else if (!myGu()) S.map.fitOpen(); else S.map.home();
   frontLabel();
