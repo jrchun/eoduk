@@ -352,10 +352,10 @@ create or replace function private.me() returns public.players
 language plpgsql stable security definer set search_path = '' as $$
 declare p public.players;
 begin
-  if auth.uid() is null then raise exception '로그인이 필요합니다.' using errcode = 'P0001'; end if;
+  if auth.uid() is null then raise exception '로그인이 필요해요.' using errcode = 'P0001'; end if;
   select * into p from public.players where id = auth.uid();
   if not found or p.gu is null or p.season is distinct from private.season_of(private.kst_date(now())) then
-    raise exception '이번 시즌의 구를 먼저 고르세요.' using errcode = 'P0001';
+    raise exception '이번 시즌의 구를 먼저 골라 주세요.' using errcode = 'P0001';
   end if;
   return p;
 end $$;
@@ -410,18 +410,18 @@ create or replace function public.join_game(nick text, pick text) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare s date; p public.players; n int; total int; cnt int;
 begin
-  if auth.uid() is null then raise exception '로그인이 필요합니다.' using errcode = 'P0001'; end if;
+  if auth.uid() is null then raise exception '로그인이 필요해요.' using errcode = 'P0001'; end if;
   nick := btrim(coalesce(nick, ''));
   if char_length(nick) < 1 or char_length(nick) > 12 then raise exception '닉네임은 1~12자로 정해 주세요.' using errcode = 'P0001'; end if;
-  if not exists (select 1 from public.gus where id = pick) then raise exception '없는 구입니다.' using errcode = 'P0001'; end if;
+  if not exists (select 1 from public.gus where id = pick) then raise exception '없는 구예요.' using errcode = 'P0001'; end if;
   perform private.advance(true);
   s := private.season_of(private.kst_date(now()));
   select * into p from public.players where id = auth.uid();
   if exists (select 1 from public.players x where lower(btrim(x.nickname)) = lower(nick) and x.id <> auth.uid()) then
-    raise exception '이미 누가 쓰는 닉네임입니다. 다른 이름을 골라 주세요.' using errcode = 'P0001';
+    raise exception '이미 누가 쓰는 닉네임이에요. 다른 이름을 골라 주세요.' using errcode = 'P0001';
   end if;
   if p.id is not null and p.season = s and p.gu is not null then
-    if p.gu <> pick then raise exception '시즌 중에는 구를 바꿀 수 없습니다.' using errcode = 'P0001'; end if;
+    if p.gu <> pick then raise exception '시즌 중에는 구를 바꿀 수 없어요.' using errcode = 'P0001'; end if;
     update public.players set nickname = nick where id = p.id;
     return jsonb_build_object('ok', true, 'gu', p.gu);
   end if;
@@ -429,7 +429,7 @@ begin
   select count(*) filter (where gu = pick), count(*) into n, total from public.players where season = s;
   select count(*) into cnt from public.gus;
   if n >= 10 and n > 1.5 * (total::double precision / cnt) then
-    raise exception '이 구는 인원이 꽉 찼습니다. 다른 구를 골라 주세요.' using errcode = 'P0001';
+    raise exception '이 구는 인원이 꽉 찼어요. 다른 구를 골라 주세요.' using errcode = 'P0001';
   end if;
   insert into public.players (id, nickname, gu, season, troops, troops_at, contrib)
   values (auth.uid(), nick, pick, s, 60, now(), 0)
@@ -447,19 +447,19 @@ begin
   perform private.advance(true);
   p := private.me();
   ph := private.phase_at(now());
-  if ph ->> 'phase' <> 'day' then raise exception '진군은 낮에만 할 수 있습니다.' using errcode = 'P0001'; end if;
+  if ph ->> 'phase' <> 'day' then raise exception '진군은 낮에만 할 수 있어요.' using errcode = 'P0001'; end if;
   select * into s from public.tiles where id = src;
   select * into t from public.tiles where id = dst;
   select * into sd from public.tile_defs where id = src;
   select * into td from public.tile_defs where id = dst;
-  if s.id is null or s.owner is distinct from p.gu then raise exception '출발 칸은 우리 구 칸이어야 합니다.' using errcode = 'P0001'; end if;
-  if t.id is null or td.kind = 'river' then raise exception '그 칸으로는 갈 수 없습니다.' using errcode = 'P0001'; end if;
-  if t.owner is not distinct from p.gu then raise exception '이미 우리 칸입니다. 증원을 쓰세요.' using errcode = 'P0001'; end if;
+  if s.id is null or s.owner is distinct from p.gu then raise exception '출발 칸은 우리 구 칸이어야 해요.' using errcode = 'P0001'; end if;
+  if t.id is null or td.kind = 'river' then raise exception '그 칸으로는 갈 수 없어요.' using errcode = 'P0001'; end if;
+  if t.owner is not distinct from p.gu then raise exception '이미 우리 칸이에요. 증원을 써 주세요.' using errcode = 'P0001'; end if;
   if not exists (select 1 from public.tile_adj a join public.tiles x on x.id = a.b where a.a = dst and x.owner = p.gu) then
-    raise exception '우리 땅에 맞닿은 칸만 칠 수 있습니다.' using errcode = 'P0001';
+    raise exception '우리 땅에 맞닿은 칸만 칠 수 있어요.' using errcode = 'P0001';
   end if;
   have := private.settle(p);
-  if n is null or n < 1 or n > floor(have) then raise exception '병력이 모자랍니다.' using errcode = 'P0001'; end if;
+  if n is null or n < 1 or n > floor(have) then raise exception '병력이 모자라요.' using errcode = 'P0001'; end if;
   torch := least(1, greatest(0, coalesce(torch, 0.5)));
   dist := (abs(sd.q - td.q) + abs(sd.r - td.r) + abs(sd.q + sd.r - td.q - td.r)) / 2;
   ty := private.gu_type(p.gu);
@@ -469,7 +469,7 @@ begin
   if t.gray then mins := mins * 0.5; end if;
   arrive := now() + make_interval(mins => greatest(1, round(mins))::int);
   if arrive > (ph ->> 'sunset')::timestamptz then
-    raise exception '일몰 전에 도착하지 못합니다(도착 %).', to_char(arrive at time zone 'Asia/Seoul', 'HH24:MI') using errcode = 'P0001';
+    raise exception '일몰 전에 도착하지 못해요(도착 %).', to_char(arrive at time zone 'Asia/Seoul', 'HH24:MI') using errcode = 'P0001';
   end if;
   pw := n * (0.8 + 0.4 * torch) * case when ty = 'legend' then 0.9 else 1 end;
   update public.players set troops = troops - n where id = p.id;
@@ -486,12 +486,12 @@ begin
   perform private.advance(true);
   p := private.me();
   ph := private.phase_at(now()) ->> 'phase';
-  if ph = 'seal' then raise exception '자정부터 일출까지는 봉인 시간입니다.' using errcode = 'P0001'; end if;
+  if ph = 'seal' then raise exception '자정부터 일출까지는 봉인 시간이에요.' using errcode = 'P0001'; end if;
   select * into t from public.tiles where id = tile for update;
-  if t.id is null or t.owner is distinct from p.gu then raise exception '우리 구 칸에만 증원할 수 있습니다.' using errcode = 'P0001'; end if;
+  if t.id is null or t.owner is distinct from p.gu then raise exception '우리 구 칸에만 증원할 수 있어요.' using errcode = 'P0001'; end if;
   have := private.settle(p);
   add := least(coalesce(n, 0), floor(have)::int, 300 - t.defense);
-  if add < 1 then raise exception '증원할 병력이 없거나 칸이 가득 찼습니다.' using errcode = 'P0001'; end if;
+  if add < 1 then raise exception '증원할 병력이 없거나 칸이 가득 찼어요.' using errcode = 'P0001'; end if;
   update public.tiles set defense = defense + add, updated_at = now() where id = tile;
   update public.players set troops = troops - add, contrib = contrib + add where id = p.id;
   return jsonb_build_object('ok', true, 'added', add, 'defense', t.defense + add);
@@ -504,7 +504,7 @@ declare p public.players;
 begin
   p := private.me();
   if not exists (select 1 from public.tiles t where t.id = tile and t.owner is distinct from p.gu) then
-    raise exception '우리 칸이 아닌 칸에만 깃발을 꽂을 수 있습니다.' using errcode = 'P0001';
+    raise exception '우리 칸이 아닌 칸에만 깃발을 꽂을 수 있어요.' using errcode = 'P0001';
   end if;
   insert into public.flags (player, date, gu, tile) values (p.id, private.kst_date(now()), p.gu, tile)
   on conflict (player, date) do update set tile = excluded.tile, gu = excluded.gu;

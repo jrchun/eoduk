@@ -44,11 +44,11 @@ function toast(text, ms = 2600) {
 }
 function friendly(error) {
   const m = String(error?.message || error);
-  if (/Invalid login credentials/i.test(m)) return '이메일이나 비밀번호가 맞지 않습니다.';
-  if (/already registered/i.test(m)) return '이미 가입한 이메일입니다. 로그인을 눌러 주세요.';
-  if (/Email not confirmed/i.test(m)) return '이메일 확인이 아직 켜져 있어 로그인할 수 없습니다. 운영자에게 알려 주세요.';
-  if (/Password should be/i.test(m)) return '비밀번호는 6자 이상이어야 합니다.';
-  if (/Failed to fetch|NetworkError/i.test(m)) return '연결이 끊겼습니다. 잠시 후 다시 해 주세요.';
+  if (/Invalid login credentials/i.test(m)) return '이메일이나 비밀번호가 맞지 않아요.';
+  if (/already registered/i.test(m)) return '이미 가입한 이메일이에요. 로그인을 눌러 주세요.';
+  if (/Email not confirmed/i.test(m)) return '이메일 확인이 아직 켜져 있어 로그인할 수 없어요. 운영자에게 알려 주세요.';
+  if (/Password should be/i.test(m)) return '비밀번호는 6자 이상이어야 해요.';
+  if (/Failed to fetch|NetworkError/i.test(m)) return '연결이 끊겼어요. 잠시 후 다시 해 주세요.';
   return m;
 }
 async function rpc(name, args) {
@@ -155,16 +155,16 @@ function renderPanel(inc, ranked) {
     const b = h('button', { class: 'btn' + (need > 0 ? ' danger' : ''), type: 'button', onclick: () => { S.map.focus(c.id); openReinforce(c.id); } }, '증원');
     return li(h('span', {}, h('b', {}, `${guOf(m.gu).short} ${m.troops} → ${c.name}`), h('br'), h('small', {}, `수비 ${c.defense} · ${need > 0 ? need + ' 부족' : '막을 수 있음'}`)),
       h('span', { style: 'display:flex;flex-direction:column;align-items:flex-end;gap:4px' }, cd(m.arrive_at), b));
-  }) : [empty(gu ? '지금은 조용합니다.' : '구를 고르면 보입니다.')]));
+  }) : [empty(gu ? '지금은 조용해요.' : '구를 고르면 보여요.')]));
   const mine = (g.marches || []).filter(m => m.gu === gu && gu);
   $('pnMarch').replaceChildren(...(mine.length ? mine.map(m => {
     const joined = mine.filter(x => x.dst === m.dst).length;
     return li(h('span', {}, h('b', {}, `${S.idx.byId.get(m.src).name} → ${S.idx.byId.get(m.dst).name}`), h('br'),
       h('small', {}, `횃불꾼 ${Math.round(m.troops * m.torch)}` + (joined > 1 ? ` · ${joined}명 합류` : ''))), cd(m.arrive_at, true));
-  }) : [empty('진군 중인 무리가 없습니다.')]));
+  }) : [empty('진군 중인 무리가 없어요.')]));
   const flags = g.flags || [];
   $('pnFlags').replaceChildren(...(flags.length ? flags.map(([id, n]) => li(h('b', {}, S.idx.byId.get(id).name), h('span', {}, `깃발 ${n}개`)))
-    : [empty(gu ? '아직 없어요. 칸을 눌러 깃발을 꽂아요.' : '구를 고르면 보입니다.')]));
+    : [empty(gu ? '아직 없어요. 칸을 눌러 깃발을 꽂아 보세요.' : '구를 고르면 보여요.')]));
   $('pnRank').replaceChildren(...ranked.map((x, i) => { const el = li(h('span', {}, `${i + 1}. ${x.name}`), h('span', { class: 'num' }, `${x.tiles}칸`)); if (x.id === gu) el.className = 'me'; return el; }));
   const chat = $('pnChat');
   if (gu && CHAT[gu]) { chat.href = CHAT[gu]; chat.textContent = `${guOf(gu).name} 오픈채팅 열기`; chat.removeAttribute('aria-disabled'); }
@@ -269,7 +269,7 @@ function openTile(id) {
       if (c.kind === 'bridge') kv.append(h('dt', {}, '다리'), h('dd', {}, '강을 건너는 통로. 강변형 구가 지키면 방어 +30%'));
       if (c.gray) kv.append(h('dt', {}, '잿빛'), h('dd', {}, '어둠에 먹힌 칸. 수비 0, 진군 시간 절반'));
       if (c.edge && c.owner) kv.append(h('dt', {}, '가장자리'), h('dd', {}, '밤에 어둠과 맞닿는 칸'));
-    } else kv.append(h('dt', {}, '건너기'), h('dd', {}, '다리 칸(양화·마포·한강·동작대교)으로 건넌다'));
+    } else kv.append(h('dt', {}, '건너기'), h('dd', {}, '다리 칸(양화·마포·한강·동작대교)으로 건너요'));
     kids.push(kv);
     if (inc.length) {
       kids.push(h('h3', {}, '다가오는 진군'));
@@ -282,7 +282,7 @@ function openTile(id) {
     if (gu && c.owner === gu) row.append(h('button', { class: 'btn primary', type: 'button', disabled: ph === 'seal', onclick: () => openReinforce(id) }, '증원'));
     if (gu && c.kind !== 'river' && c.owner !== gu) row.append(h('button', { class: 'btn', type: 'button', onclick: () => plantFlag(id) }, me().flag === id ? '깃발 꽂음' : '깃발 꽂기'));
     if (row.childElementCount) kids.push(row);
-    if (gu && c.kind !== 'river' && c.owner !== gu && !canAttack(S.idx, id, gu)) kids.push(h('p', { class: 'hint' }, '우리 땅에 맞닿은 칸만 칠 수 있다.'));
+    if (gu && c.kind !== 'river' && c.owner !== gu && !canAttack(S.idx, id, gu)) kids.push(h('p', { class: 'hint' }, '우리 땅에 맞닿은 칸만 칠 수 있어요.'));
     if (!S.session) kids.push(h('button', { class: 'btn primary', type: 'button', onclick: () => showOnboard('story') }, '등불지기로 참여하기'));
     return kids;
   };
@@ -291,12 +291,12 @@ function openTile(id) {
 
 function openMarch(dstId, srcId) {
   const gu = myGu(); if (!gu) return;
-  if (!canAttack(S.idx, dstId, gu)) { toast('우리 땅에 맞닿은 칸만 칠 수 있습니다.'); return; }
+  if (!canAttack(S.idx, dstId, gu)) { toast('우리 땅에 맞닿은 칸만 칠 수 있어요.'); return; }
   const dst = S.idx.byId.get(dstId);
   let src = srcId && S.idx.byId.get(srcId)?.owner === gu ? srcId : bestSource(S.idx, dstId, gu);
   S.selected = dstId; S.map.set({ selected: dstId });
   const have = troopsLocal(me().troops, me().rate, S.fetchedAt, now());
-  if (have < 1) { toast('병력이 없습니다. 시간이 지나면 쌓입니다.'); return; }
+  if (have < 1) { toast('병력이 없어요. 시간이 지나면 쌓여요.'); return; }
   const nIn = h('input', { type: 'range', min: 1, max: have, value: Math.min(have, Math.max(1, Math.ceil(have * 0.8))), id: 'mN' });
   const rIn = h('input', { type: 'range', min: 0, max: 100, step: 10, value: Math.round(torchRatio() * 100), id: 'mR' });
   const nOut = h('span', { class: 'num' }), rOut = h('span', {}), info = h('div', { class: 'box' });
@@ -315,11 +315,11 @@ function openMarch(dstId, srcId) {
       h('p', {}, `출발 ${S.idx.byId.get(src).name} → ${dst.name} · 거리 ${pv.dist}칸`),
       h('p', {}, '도착 ', h('b', { class: 'num' }, fmtClock(arrive)), ` (${pv.minutes}분 뒤)`),
       h('p', {}, `공격력 약 ${Math.round(atk)} 대 방어력 약 ${Math.round(def)} · 승산 `, h('b', { class: odds[1] }, odds[0])),
-      late ? h('p', { class: 'bad' }, '일몰 전에 도착하지 못해 보낼 수 없습니다.') : null].filter(Boolean));
+      late ? h('p', { class: 'bad' }, '일몰 전에 도착하지 못해 보낼 수 없어요.') : null].filter(Boolean));
     go.disabled = late;
   };
   nIn.addEventListener('input', upd); rIn.addEventListener('input', upd);
-  const srcPick = h('p', { class: 'hint' }, '출발 칸은 가장 가까운 우리 칸. 지도에서 우리 칸을 끌어 적 칸에 놓아도 된다.');
+  const srcPick = h('p', { class: 'hint' }, '출발 칸은 가장 가까운 우리 칸이에요. 지도에서 우리 칸을 끌어 적 칸에 놓아도 돼요.');
   go.addEventListener('click', async () => {
     go.disabled = true;
     try {
@@ -331,7 +331,7 @@ function openMarch(dstId, srcId) {
   openSheet(`${dst.name} 진군`, [
     h('div', { class: 'slider' }, h('label', { for: 'mN' }, '보낼 병력', nOut), nIn),
     h('div', { class: 'slider' }, h('label', { for: 'mR' }, '횃불꾼 비율', rOut), rIn,
-      h('p', { class: 'hint' }, '횃불꾼 공격 1.2, 등롱지기 공격 0.8. 도착한 병력이 판정 뒤 칸을 지킨다.')),
+      h('p', { class: 'hint' }, '횃불꾼은 공격 1.2, 등롱지기는 공격 0.8이에요. 도착한 병력이 판정 뒤 칸을 지켜요.')),
     info, srcPick, go]);
   upd();
 }
@@ -340,7 +340,7 @@ function openReinforce(id) {
   const gu = myGu(), c = S.idx.byId.get(id);
   const have = troopsLocal(me().troops, me().rate, S.fetchedAt, now());
   const room = BAL.tileCap - c.defense, max = Math.min(have, room);
-  if (max < 1) { toast(room < 1 ? '이 칸은 수비가 가득 찼습니다.' : '병력이 없습니다. 시간이 지나면 쌓입니다.'); return; }
+  if (max < 1) { toast(room < 1 ? '이 칸은 수비가 가득 찼어요.' : '병력이 없어요. 시간이 지나면 쌓여요.'); return; }
   const nIn = h('input', { type: 'range', min: 1, max, value: max, id: 'rN' });
   const out = h('span', { class: 'num' });
   const upd = () => { out.textContent = `${nIn.value}명 → 수비 ${c.defense + +nIn.value}`; };
@@ -354,13 +354,13 @@ function openReinforce(id) {
   const night = phase() === 'night';
   openSheet(`${c.name} 증원`, [
     h('div', { class: 'slider' }, h('label', { for: 'rN' }, '쌓을 병력', out), nIn),
-    h('p', { class: 'hint' }, night ? '밤에는 어둠과 맞닿은 칸을 먼저 채워라. 등롱지기는 어둠 저항 +20%.' : '진군선을 보고 도착 전에 쌓아라. 칸 수비 상한 300.'),
+    h('p', { class: 'hint' }, night ? '밤에는 어둠과 맞닿은 칸부터 채워 주세요. 등롱지기는 어둠 저항이 20% 높아요.' : '진군선을 보고 도착 전에 쌓아 주세요. 칸 수비는 300까지 쌓을 수 있어요.'),
     go]);
   upd();
 }
 
 async function plantFlag(id) {
-  try { await rpc('plant_flag', { tile: id }); toast('깃발을 꽂았습니다. 가장 많이 꽂힌 칸이 오늘 우리 구 목표.'); refresh(); }
+  try { await rpc('plant_flag', { tile: id }); toast('깃발을 꽂았어요. 가장 많이 꽂힌 칸이 오늘 우리 구의 목표가 돼요.'); refresh(); }
   catch (e) { toast(e.message); }
 }
 
@@ -370,7 +370,7 @@ $('btnMarch').addEventListener('click', () => {
   if (S.selected && canAttack(S.idx, S.selected, gu)) return openMarch(S.selected);
   const target = S.game.flags?.find(([id]) => canAttack(S.idx, id, gu))?.[0];
   if (target) { S.map.focus(target); return openMarch(target); }
-  toast('칠 칸을 지도에서 누르세요. 우리 칸을 끌어 적 칸에 놓아도 됩니다.');
+  toast('칠 칸을 지도에서 눌러 주세요. 우리 칸을 끌어 적 칸에 놓아도 돼요.');
 });
 $('btnReinforce').addEventListener('click', () => {
   const gu = myGu(); if (!gu) return;
@@ -379,7 +379,7 @@ $('btnReinforce').addEventListener('click', () => {
   const inc = incoming(S.idx, S.game.marches, gu)[0];
   const pick = inc ? inc.dst : (phase() === 'night' ? darkFront(S.idx, gu).sort((a, b) => a.defense - b.defense)[0]?.id : null);
   if (pick) { S.map.focus(pick); return openReinforce(pick); }
-  toast('증원할 우리 칸을 지도에서 누르세요.');
+  toast('증원할 우리 칸을 지도에서 눌러 주세요.');
 });
 $('warn').addEventListener('click', e => {
   const id = +$('warn').dataset.tile; if (!id) return;
@@ -403,7 +403,7 @@ function openMenu() {
       h('button', { class: 'btn', type: 'button', onclick: openReport }, '일출 리포트')),
     gu ? (CHAT[gu]
       ? h('a', { class: 'btn', href: CHAT[gu], target: '_blank', rel: 'noopener', style: 'text-align:center;text-decoration:none' }, `${guOf(gu).short} 오픈채팅 열기`)
-      : h('p', { class: 'hint' }, `${guOf(gu).short} 오픈채팅 링크는 아직 없습니다.`)) : null,
+      : h('p', { class: 'hint' }, `${guOf(gu).short} 오픈채팅 링크는 아직 없어요.`)) : null,
     h('div', { class: 'row' },
       h('button', { class: 'btn', type: 'button', onclick: e => { S.sound = !S.sound; store.set('sound', S.sound ? '1' : '0'); e.target.textContent = S.sound ? '소리 끄기' : '소리 켜기'; beep(); } }, S.sound ? '소리 끄기' : '소리 켜기'),
       h('button', { class: 'btn', type: 'button', onclick: openHelp }, '규칙')),
@@ -417,15 +417,15 @@ function openMenu() {
 function openHelp() {
   const p = t => h('p', {}, t);
   openSheet('규칙', [
-    p('해가 지면 도시는 어둑시니에게 먹힌다. 불을 밝힌 땅만 내일을 맞는다. 시간은 실제 서울 일출·일몰을 따른다.'),
+    p('해가 지면 도시는 어둑시니에게 먹혀요. 불을 밝힌 땅만 내일을 맞아요. 시간은 실제 서울 일출·일몰을 따라요.'),
     h('h3', {}, '낮 — 등불 쟁탈전'),
-    p('병력은 시간당 30명씩 쌓이고 90명이 상한이다. 진군은 우리 땅에 맞닿은 칸으로, 증원은 우리 칸에 병력을 쌓는다. 진군선은 모두에게 보이니 도착 전에 증원으로 막아라. 일몰 전에 도착하지 못하는 진군은 보낼 수 없다.'),
-    p('판정: 공격력 × (0.9~1.1) > 방어력이면 점령. 칸 수비는 등롱지기(수비 1.2)이고, 붙어 있는 우리 칸마다 방어 +5%(최대 30%).'),
+    p('병력은 시간당 30명씩 쌓이고 90명까지 모을 수 있어요. 진군은 우리 땅에 맞닿은 칸으로 보내고, 증원은 우리 칸에 병력을 쌓아요. 진군선은 모두에게 보이니 도착 전에 증원으로 막아 주세요. 일몰 전에 도착하지 못하는 진군은 보낼 수 없어요.'),
+    p('공격력 × (0.9~1.1)이 방어력보다 크면 점령해요. 칸 수비는 등롱지기(수비 1.2)이고, 붙어 있는 우리 칸마다 방어가 5%씩(최대 30%) 올라가요.'),
     h('h3', {}, '밤 — 어둑시니'),
-    p('일몰부터 자정까지 구끼리 싸움은 멈추고 증원만 된다(생산 절반). 어둠은 지도 가장자리와 지난밤 잿빛이 된 칸에서 여덟 번 밀려온다. 압력이 수비를 넘으면 그 칸은 잿빛이 된다. 많은 사람이 들여다본 칸일수록 압력이 세진다.'),
-    p('자정부터 일출까지는 봉인. 해가 뜨면 잿빛 칸(수비 0, 진군 시간 절반)을 두고 쟁탈이 시작된다.'),
+    p('일몰부터 자정까지는 구끼리 싸움이 멈추고 증원만 할 수 있어요(생산은 절반). 어둠은 지도 가장자리와 지난밤 잿빛이 된 칸에서 여덟 번 밀려와요. 압력이 수비를 넘으면 그 칸은 잿빛이 돼요. 많은 사람이 들여다본 칸일수록 압력이 세져요.'),
+    p('자정부터 일출까지는 봉인 시간이에요. 해가 뜨면 잿빛 칸(수비 0, 진군 시간 절반)을 두고 쟁탈이 시작돼요.'),
     h('h3', {}, '한 주'),
-    p('매일 자정에 살아남은 등불 수로 순위를 매긴다. 일요일 밤은 긴 밤(압력 1.5배). 긴 밤을 넘긴 뒤 등불이 가장 많은 구가 우승하고 세계는 처음으로 돌아간다. 시즌 중에는 구를 바꿀 수 없다.'),
+    p('매일 자정에 살아남은 등불 수로 순위를 매겨요. 일요일 밤은 압력이 1.5배인 긴 밤이에요. 긴 밤을 넘긴 뒤 등불이 가장 많은 구가 우승하고, 세계는 처음으로 돌아가요. 시즌 중에는 구를 바꿀 수 없어요.'),
   ]);
 }
 
@@ -460,7 +460,7 @@ async function openReport(auto) {
       const line = reportLine(r, gu, S.idx);
       kids.push(h('div', { class: 'box' },
         h('b', {}, `${guOf(gu).name}: 지킨 등불 ${line.kept ?? '-'}칸 · 잃은 칸 ${line.lost.length}`),
-        h('span', { class: 'hint' }, line.lost.length ? '어둠에 먹힌 칸: ' + line.lost.join(', ') : '어둠에 내준 칸이 없다.')));
+        h('span', { class: 'hint' }, line.lost.length ? '어둠에 먹힌 칸: ' + line.lost.join(', ') : '어둠에 내준 칸이 없어요.')));
       const card = h('button', { class: 'btn primary', type: 'button' }, '공유 카드 만들기');
       card.addEventListener('click', () => shareCard(r, line));
       kids.push(card);
@@ -484,7 +484,7 @@ async function shareCard(r, line) {
     if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], text, url: location.origin }); return; }
   } catch { /* 공유를 닫으면 내려받기로 */ }
   const a = h('a', { href: URL.createObjectURL(blob), download: file.name }); document.body.append(a); a.click(); a.remove();
-  toast('카드를 내려받았습니다.');
+  toast('카드를 내려받았어요.');
 }
 
 // ---------- 어둑시니 응시: 지금 보는 칸을 알린다(밤에 압력이 세진다) ----------
@@ -499,9 +499,9 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) { re
 
 // ---------- 온보딩 ----------
 const STORY = [
-  ['해가 지면 도시는 어둑시니에게 먹힌다.', '어둠 속에서 쳐다볼수록 커진다는 요괴. 해가 지면 깨어나 불 꺼진 땅부터 삼킨다.'],
-  ['서울의 불씨는 정해져 있다.', '우리 등불을 늘리는 길은 남의 등불을 꺼뜨리고 그 자리에 불을 켜는 것뿐. 낮에는 동네끼리 등불을 빼앗는다.'],
-  ['불을 밝힌 땅만 내일을 맞는다.', '너는 우리 구를 지키는 등불지기. 많이 먹으면 밤에 지키기 힘들고, 적게 먹으면 순위에서 밀린다.'],
+  ['해가 지면 도시는 어둑시니에게 먹혀요.', '어둑시니는 어둠 속에서 쳐다볼수록 커진다는 요괴예요. 해가 지면 깨어나 불 꺼진 땅부터 삼켜요.'],
+  ['서울의 불씨는 정해져 있어요.', '우리 등불을 늘리는 길은 남의 등불을 꺼뜨리고 그 자리에 불을 켜는 것뿐이에요. 낮에는 동네끼리 등불을 빼앗아요.'],
+  ['불을 밝힌 땅만 내일을 맞아요.', '당신은 우리 구를 지키는 등불지기예요. 많이 먹으면 밤에 지키기 힘들고, 적게 먹으면 순위에서 밀려요.'],
 ];
 let pickedGu = null;
 function showOnboard(step, i = 0) {
@@ -528,7 +528,7 @@ function showOnboard(step, i = 0) {
       for (const c of cells) c.setAttribute('aria-pressed', String(c.dataset.gu === pickedGu));
       go.disabled = !pickedGu;
       go.textContent = pickedGu ? `${josa(guOf(pickedGu).name, '으로', '로')} 정하기` : '구를 골라 주세요';
-      if (!pickedGu) { detail.replaceChildren(h('p', { class: 'hint' }, '구를 누르면 강점과 약점이 여기 나온다. 사람이 적은 구는 병력 생산이 늘어난다.')); return; }
+      if (!pickedGu) { detail.replaceChildren(h('p', { class: 'hint' }, '구를 누르면 강점과 약점이 여기 나와요. 사람이 적은 구는 병력 생산이 늘어나요.')); return; }
       const g = guOf(pickedGu), t = TYPES[g.type];
       detail.replaceChildren(
         h('b', {}, `${g.name} · ${t.name} · ${g.symbol}`),
@@ -542,7 +542,7 @@ function showOnboard(step, i = 0) {
         cells.push(c); return c;
       }));
     card.replaceChildren(steps(3), h('h1', { class: 'ob-title' }, '어느 구의 등불을 지킬까'),
-      h('p', { class: 'hint' }, '시즌(한 주) 동안은 바꿀 수 없다.'),
+      h('p', { class: 'hint' }, '시즌(한 주) 동안은 바꿀 수 없어요.'),
       h('div', { class: 'gugrid' }, col('n'), col('s')), detail,
       h('div', { class: 'ob-foot' }, go, close));
     update();
@@ -552,7 +552,7 @@ function showOnboard(step, i = 0) {
     const signup = step === 'signup', nickOnly = step === 'nick';
     const msg = h('p', { class: 'hint', role: 'status' });
     const f = h('form', { class: 'sheet-body' },
-      (signup || nickOnly) ? h('div', { class: 'field' }, h('label', { for: 'obNick' }, '닉네임 (1~12자, 순위에 보임. 고쳐도 된다)'),
+      (signup || nickOnly) ? h('div', { class: 'field' }, h('label', { for: 'obNick' }, '닉네임 (1~12자, 순위에 보여요. 고쳐도 돼요)'),
         h('div', { class: 'nickrow' }, h('input', { id: 'obNick', type: 'text', maxlength: MAX_NICK, required: true, value: me()?.nickname || '', autocomplete: 'off' }),
           h('button', { class: 'btn small', type: 'button', onclick: () => fillNickname(true) }, '다른 추천'))) : null,
       nickOnly ? null : h('div', { class: 'field' }, h('label', { for: 'obEmail' }, '이메일'), h('input', { id: 'obEmail', type: 'email', autocomplete: 'email', required: true })),
@@ -565,7 +565,7 @@ function showOnboard(step, i = 0) {
           const email = $('obEmail').value.trim(), password = $('obPw').value;
           const { data, error } = signup ? await sb.auth.signUp({ email, password }) : await sb.auth.signInWithPassword({ email, password });
           if (error) throw new Error(friendly(error));
-          if (signup && !data.session) throw new Error('가입은 됐지만 이메일 확인이 켜져 있어 바로 들어갈 수 없습니다. 운영자에게 알려 주세요.');
+          if (signup && !data.session) throw new Error('가입은 됐지만 이메일 확인이 켜져 있어 바로 들어갈 수 없어요. 운영자에게 알려 주세요.');
           S.session = data.session;
         }
         if (signup || nickOnly) {
@@ -579,7 +579,7 @@ function showOnboard(step, i = 0) {
       } catch (err) { msg.textContent = err.message; }
     });
     card.replaceChildren(steps(4), h('h1', {}, signup ? '등불지기 등록' : nickOnly ? '이번 시즌 이름' : '다시 오셨군요'),
-      signup ? h('p', { class: 'hint' }, `${guOf(pickedGu).name} · 한 사람이 한 계정으로 참여합니다.`) : null, f,
+      signup ? h('p', { class: 'hint' }, `${guOf(pickedGu).name} · 한 사람이 한 계정으로 참여해요.`) : null, f,
       h('div', { class: 'row', style: 'justify-content:space-between' },
         h('button', { class: 'linkbtn', type: 'button', onclick: () => showOnboard('gu') }, '구 다시 고르기'),
         nickOnly ? null : h('button', { class: 'linkbtn', type: 'button', onclick: () => showOnboard(signup ? 'login' : 'signup') }, signup ? '이미 있어요, 로그인' : '처음이에요, 등록')));
@@ -588,10 +588,10 @@ function showOnboard(step, i = 0) {
   }
   if (step === 'home') {
     const ios = /iPhone|iPad/.test(navigator.userAgent);
-    card.replaceChildren(h('h1', {}, i ? '등불을 밝혔다' : '홈 화면에 추가'),
-      i ? h('p', {}, `${guOf(myGu())?.name || ''}의 등불지기가 됐다. 병력 60명으로 시작한다. 해 지기 전에 우리 칸을 지키고, 남의 등불을 노려라.`) : null,
-      h('p', {}, ios ? 'Safari 아래쪽 공유 버튼 › "홈 화면에 추가"를 누르면 앱처럼 열린다.' : '브라우저 메뉴(⋮) › "홈 화면에 추가" 또는 "앱 설치"를 누르면 앱처럼 열린다.'),
-      h('p', { class: 'hint' }, '30초면 충분하다. 점심, 퇴근 전 일몰 러시, 자기 전 증원.'),
+    card.replaceChildren(h('h1', {}, i ? '등불을 밝혔어요' : '홈 화면에 추가'),
+      i ? h('p', {}, `${guOf(myGu())?.name || ''}의 등불지기가 됐어요. 병력 60명으로 시작해요. 해 지기 전에 우리 칸을 지키고, 남의 등불을 노려 보세요.`) : null,
+      h('p', {}, ios ? 'Safari 아래쪽 공유 버튼 › "홈 화면에 추가"를 누르면 앱처럼 열려요.' : '브라우저 메뉴(⋮) › "홈 화면에 추가" 또는 "앱 설치"를 누르면 앱처럼 열려요.'),
+      h('p', { class: 'hint' }, '30초면 충분해요. 점심, 퇴근 전 일몰 러시, 자기 전 증원.'),
       h('button', { class: 'btn primary', type: 'button', onclick: hideOnboard }, '지도로'));
   }
 }
@@ -635,4 +635,4 @@ async function start() {
     if (changed) refresh();
   });
 }
-start().catch(e => toast('불러오지 못했습니다: ' + e.message, 8000));
+start().catch(e => toast('불러오지 못했어요: ' + e.message, 8000));

@@ -70,7 +70,7 @@ export function drawShareCard(cv, { idx, gu, guName, kept, lost, night }) {
   g.font = '700 88px "Gowun Batang", serif'; g.fillText(guName, W / 2, 330);
   g.font = '48px "Gowun Dodum", sans-serif';
   g.fillText(`등불 ${kept ?? '?'}칸을 지켰고`, W / 2, 410);
-  g.fillText(`${lost}칸을 어둠에 내줬다`, W / 2, 475);
+  g.fillText(`${lost}칸을 어둠에 내줬어요`, W / 2, 475);
   // 지도
   const tiles = [...idx.byId.values()], S = 30;
   const pts = tiles.map(c => hexToPixel(c.q, c.r, S));

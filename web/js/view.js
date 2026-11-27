@@ -80,5 +80,5 @@ export function josa(word, withFinal, without) {
 }
 // 공유 문구
 export function shareText(guName, kept, lostCount) {
-  return `어둑시니 — 어젯밤 ${josa(guName, '은', '는')} 등불 ${kept ?? '?'}개를 지켰고 ${lostCount}개를 어둠에 내줬다. 해 지기 전에 등불을 지켜라.`;
+  return `어둑시니 — 어젯밤 ${josa(guName, '은', '는')} 등불 ${kept ?? '?'}개를 지켰고 ${lostCount}개를 어둠에 내줬어요. 해 지기 전에 등불을 지켜라.`;
 }
