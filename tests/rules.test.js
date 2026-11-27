@@ -157,3 +157,19 @@ test('문구: 받침에 맞는 조사와 공유 문구', () => {
   assert.equal(V.josa('마포', '은', '는'), '마포는');
   assert.match(V.shareText('관악', 20, 3), /관악은 등불 20개를 지켰고 3개를/);
 });
+
+import { suggestNickname, nicknameCandidates, MAX_NICK } from '../web/js/names.js';
+test('추천 닉네임: 인디언식, 12자 이하, 후보는 서로 다르다', () => {
+  let seed = 1; const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  for (let i = 0; i < 500; i++) {
+    const n = suggestNickname(rand);
+    assert.ok(n.length >= 2 && n.length <= MAX_NICK, n);
+    assert.ok(/^[가-힣 ]+$/.test(n), n);
+  }
+  const c = nicknameCandidates(10, rand);
+  assert.equal(new Set(c).size, c.length);
+  assert.ok(c.length >= 8);
+  // 패턴 셋이 모두 나온다: "~의 ~", "~고 ~"류, "~와/과 ~"
+  const many = Array.from({ length: 300 }, () => suggestNickname(rand)).join('|');
+  assert.match(many, /의 /); assert.match(many, /(와|과) /);
+});

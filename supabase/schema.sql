@@ -44,6 +44,8 @@ create table if not exists public.players (
   contrib int not null default 0,
   created_at timestamptz not null default now()
 );
+-- 닉네임은 겹칠 수 없다(대소문자·앞뒤 공백 무시)
+create unique index if not exists players_nickname_unique on public.players (lower(btrim(nickname)));
 create table if not exists public.marches (
   id bigint generated always as identity primary key,
   season date not null, player uuid not null references public.players (id) on delete cascade,
@@ -415,7 +417,10 @@ begin
   perform private.advance(true);
   s := private.season_of(private.kst_date(now()));
   select * into p from public.players where id = auth.uid();
-  if found and p.season = s and p.gu is not null then
+  if exists (select 1 from public.players x where lower(btrim(x.nickname)) = lower(nick) and x.id <> auth.uid()) then
+    raise exception '이미 누가 쓰는 닉네임입니다. 다른 이름을 골라 주세요.' using errcode = 'P0001';
+  end if;
+  if p.id is not null and p.season = s and p.gu is not null then
     if p.gu <> pick then raise exception '시즌 중에는 구를 바꿀 수 없습니다.' using errcode = 'P0001'; end if;
     update public.players set nickname = nick where id = p.id;
     return jsonb_build_object('ok', true, 'gu', p.gu);
@@ -552,6 +557,14 @@ begin
         where e.kind = 'consume' and e.gu = g.id and e.at >= st.sunset and e.at <= private.kst_midnight(d + 1)))) from public.gus g));
 end $$;
 
+-- 추천 닉네임 중 아직 아무도 안 쓰는 것만 돌려준다(가입 전에도 부른다). 한 번에 20개까지.
+create or replace function public.nicknames_free(names text[]) returns text[]
+language sql stable security definer set search_path = '' as $$
+  select coalesce(array_agg(n order by ord), '{}') from unnest(names[1:20]) with ordinality as u(n, ord)
+  where char_length(btrim(n)) between 1 and 12
+    and not exists (select 1 from public.players p where lower(btrim(p.nickname)) = lower(btrim(n)))
+$$;
+
 -- 예약 작업(10분마다, src/jobs.js)과 잠들기 방지용. 공개 키로 불러도 시간이 된 일만 처리한다.
 create or replace function public.tick() returns jsonb
 language plpgsql security definer set search_path = '' as $$
@@ -569,6 +582,8 @@ revoke all on function public.game_state(), public.join_game(text, text), public
   public.reinforce(int, int), public.plant_flag(int), public.watch(int), public.ranking(), public.sunrise_report(),
   public.tick(), public.keepalive() from public;
 grant execute on function public.game_state(), public.watch(int), public.ranking(), public.sunrise_report(), public.tick(), public.keepalive() to anon, authenticated;
+revoke all on function public.nicknames_free(text[]) from public;
+grant execute on function public.nicknames_free(text[]) to anon, authenticated;
 grant execute on function public.join_game(text, text), public.send_march(int, int, int, real), public.reinforce(int, int), public.plant_flag(int) to authenticated;
 -- Supabase는 새 함수에 anon 실행 권한을 기본으로 주므로 로그인 전용 함수는 따로 뺀다
 revoke execute on function public.join_game(text, text), public.send_march(int, int, int, real), public.reinforce(int, int), public.plant_flag(int) from anon;
