@@ -17,14 +17,17 @@ Cloudflare·Supabase 연결은 MCP(브라우저 로그인)로 한다. **API 토�
 - 앱 허브(만든 앱들을 모아 보여 주는 페이지)의 주소. 이 줄 한 곳에만 둔다. 비어 있으면(`(아직 없음)`) 허브 등록을 건너뛴다(`docs/AGENT_SETUP.md` 7절). 이 틀을 다른 사람이 복사해 쓰면 `(아직 없음)`으로 비우거나 자기 허브 주소로 바꾼다.
 
 ## 구성
-- `web/app.json`·`web/og.png`·`/api/health`의 `starter`·`usage`: 앱 허브가 읽는 자기소개서·대표 화면·상태. 자세한 것은 `docs/HUB.md`.
-- `web/`: 정적 화면(빌드 없음). Worker 정적 자산으로 그대로 배포된다. `web/js/docsync.js`가 불러오기·자동 저장·충돌(409)·편집 암호(401)를 맡는다. 앱 화면은 `web/js/app.js`.
-- `src/worker.js`: `/api/*`만 처리. 새 API는 `src/api/<이름>.js`에 `GET/PUT/POST/DELETE`를 만들고 `ROUTES`에 추가.
-- `src/jobs.js`: 예약 작업(매일 등). `wrangler.toml`의 `[triggers] crons`(UTC) 시각에 Worker 안에서 돈다. 토큰·GitHub Actions 없음. 무료 플랜은 계정 전체 Cron 5개.
-- `db/schema.sql`: D1 스키마(`CREATE TABLE IF NOT EXISTS`만). 바꾸면 `node scripts/cf_mcp.mjs prepare`로 만든 코드를 Cloudflare MCP `execute`로 실행해 적용.
-- `scripts/cf_mcp.mjs`: Cloudflare MCP `execute`에 넘길 코드를 만든다(`address`·`prepare`·`fill`·`connect`·`domain`·`status`, 예비 `deploy`). 순서는 `docs/AGENT_SETUP.md` 2·5~7. 실제로 Cloudflare에서 도는 코드는 `scripts/cf_mcp/remote.js`(혼자 완결된 함수만, 테스트는 가짜 Cloudflare로).
-- Supabase 모드: `supabase/schema.sql`(RLS 필수), `scripts/use_supabase.py`가 `examples/supabase/web`의 로그인 예제로 화면을 바꾸고 `wrangler.toml` `[vars]`에 주소·공개 키를 넣는다. 화면에는 publishable 키만 넣는다.
-- `wrangler.toml`: Worker 설정의 기준. 배포 절차와 함정은 `docs/SETUP.md`.
+- 이 앱: **어둑시니**. 동네(구)끼리 헥스 칸(등불)을 빼앗고 밤에는 어둠을 버티는 지도 땅따먹기 웹게임. 규칙·숫자·구조·데이터 흐름은 `README.md`.
+- **Supabase 모드**(사람마다 로그인). 규칙 판정은 전부 `supabase/schema.sql`의 함수에 있다. 표는 읽기만 열고, 쓰기는 `security definer` 함수로만 한다. 내부 함수는 `private` 스키마.
+- 숫자를 바꾸면 `web/js/rules.js`(화면 미리보기·테스트)와 `supabase/schema.sql`(실제 판정) **둘 다** 고친다.
+- `web/js/`: `rules.js`·`view.js`는 순수 함수(테스트 `tests/rules.test.js`), `map.js` 지도 그리기, `sprites.js` 도트 그림, `story.js` 온보딩·공유 카드, `app.js` 화면 동작.
+- 테마는 게임 시간이 정한다(낮 `data-theme="day"`, 밤·봉인 `night`). 시스템 다크모드를 따르지 않는다. "라이트·다크 확인"은 낮·밤 두 테마로 한다.
+- 지도는 `scripts/build_map.mjs`가 `data/geo`에서 만든다(`web/data/map.json`, `supabase/seed.sql`). 칸 번호가 바뀌므로 시즌 사이에만 바꾼다.
+- `src/jobs.js`: 10분마다(`*/10 * * * *`) `rpc/tick`. 진군 도착은 지연 계산이라 이 작업은 예비이고, 밤 침식·자정 기록·시즌 정산을 맡는다.
+- `web/app.json`·`web/og.png`·`/api/health`의 `starter`: 앱 허브가 읽는 자기소개서·대표 화면·상태(`docs/HUB.md`).
+- `src/worker.js`: `/api/*`만 처리(Supabase 모드라 `/api/health`만 쓴다). `wrangler.toml`이 Worker 설정의 기준. 배포 절차와 함정은 `docs/SETUP.md`.
+- `scripts/cf_mcp.mjs`: Cloudflare MCP `execute`에 넘길 코드를 만든다(`address`·`prepare`·`fill`·`connect`·`domain`·`status`). 순서는 `docs/AGENT_SETUP.md`.
+- 클라우드 세션은 개인 환경 "woong-apps eoduk"(Supabase·사이트·허브 주소 허용)에서 한다.
 
 ## 지켜야 할 것
 - 화면은 빌드 없는 정적 파일. React·번들러·CSS 프레임워크를 들이지 않는다. 외부 스크립트는 글꼴(Google Fonts)만.

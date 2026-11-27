@@ -2,7 +2,7 @@
 # name, database_name, database_id는 scripts/cf_mcp.mjs fill(또는 wrangler d1 create 출력)로 채운다.
 # 편집 암호는 여기 두지 않는다. 사이트에서 처음 저장할 때 화면에서 정한다(D1에 해시로 저장).
 # 대시보드 › Worker › 설정 › 변수 및 비밀 › Secret WRITE_TOKEN을 넣으면 그것이 우선한다.
-name = "my-app"
+name = "eoduk"
 main = "./src/worker.js"
 compatibility_date = "2026-11-01"
 # 옛 workers.dev 주소도 계속 연다. 아래 [[routes]](내 도메인 주소)를 넣으면 Cloudflare가 workers.dev를 끄기 때문에 꼭 적어 둔다.
@@ -14,13 +14,21 @@ send_metrics = false
 directory = "./web"
 binding = "ASSETS"
 
-[[d1_databases]]
-binding = "DB"
-database_name = "my-app"
-database_id = "__D1_DATABASE_ID__"
 
-# 예약 작업(src/jobs.js). UTC 기준: 매일 07:30 KST. 무료 플랜은 계정 전체에서 Cron Trigger 5개까지다.
+# 예약 작업(src/jobs.js). 10분마다 게임 시간 진행(밤 침식·자정 기록·시즌 정산, 잠들기 방지 겸).
+# 진군 도착은 화면을 연 사람이 있을 때 지연 계산하므로 이 작업은 예비다. 무료 플랜은 계정 전체 Cron Trigger 5개까지(이 앱은 1개).
 [triggers]
-crons = ["30 22 * * *"]
+crons = ["*/10 * * * *"]
 
 # 내 도메인 주소(https://<앱이름>.<내 도메인>)는 fill이 CLAUDE.md의 "내 도메인:" 줄을 보고 맨 아래에 [[routes]]로 넣는다.
+
+# Supabase 연결(공개 값). 매일 잠들기 방지 예약 작업(src/jobs.js)이 쓴다.
+[vars]
+SUPABASE_URL = "https://mdusiykkpllzkkemgcxw.supabase.co"
+SUPABASE_KEY = "sb_publishable_EMU2w_NccwX3Yu3afHfdCg_dJp1Hx7S"
+
+# >>> 내 도메인 주소 (scripts/cf_mcp.mjs fill이 관리한다. 손으로 고치지 않는다)
+[[routes]]
+pattern = "eoduk.woongstudio.com"
+custom_domain = true
+# <<< 내 도메인 주소

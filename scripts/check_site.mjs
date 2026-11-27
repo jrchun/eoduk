@@ -52,7 +52,7 @@ if (mode === 'd1') {
       expect(r.ok, 'HTTP ' + r.status + ' — supabase/schema.sql을 적용했는지 확인');
     });
     await check('로그인 없이는 데이터가 안 보임 (RLS)', async () => {
-      const r = await fetch(cfg.url + '/rest/v1/notes?select=id&limit=1', { headers: { apikey: cfg.key } });
+      const r = await fetch(cfg.url + '/rest/v1/players?select=id&limit=1', { headers: { apikey: cfg.key } });
       const j = await r.json().catch(() => null);
       expect(r.ok && Array.isArray(j) && j.length === 0, '로그인 없이 행이 보임 — RLS 정책 확인: ' + JSON.stringify(j).slice(0, 120));
     });

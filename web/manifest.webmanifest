@@ -1,0 +1,15 @@
+{
+  "name": "어둑시니",
+  "short_name": "어둑시니",
+  "description": "해가 지면 어둠에 먹히는 도시, 동네끼리 등불을 지키는 땅따먹기",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#efe6d2",
+  "theme_color": "#2b2420",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

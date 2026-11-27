@@ -36,14 +36,16 @@ test('wrangler.toml 읽기', () => {
   const c = readConfig(ROOT);
   assert.equal(c.main, './src/worker.js');
   assert.equal(c.assetsDir, './web');
-  assert.equal(c.d1.binding, 'DB');
-  assert.deepEqual(c.crons, ['30 22 * * *']);
+  // 어둑시니는 Supabase 모드라 D1 연결이 없고, 예약 작업은 10분마다다
+  assert.equal(c.d1?.binding, undefined);
+  assert.deepEqual(c.crons, ['*/10 * * * *']);
   const t = parseToml('a = "x" # 주석\n[vars]\nK = "v"\n[[d1_databases]]\nid = "1"\n[[d1_databases]]\nid = "2"\n');
   assert.deepEqual(t, { top: { a: 'x' }, tables: { vars: { K: 'v' } }, arrays: { d1_databases: [{ id: '1' }, { id: '2' }] } });
 });
 
 test('fill: 이름과 D1 ID만 바꾸고 나머지는 그대로', () => {
-  const src = fs.readFileSync(path.join(ROOT, 'wrangler.toml'), 'utf8');
+  // 틀(D1 모드)의 wrangler.toml 모양으로 시험한다(이 저장소는 Supabase 모드라 D1 칸이 없다)
+  const src = 'name = "my-app"\nmain = "./src/worker.js"\n\n[[d1_databases]]\nbinding = "DB"\ndatabase_name = "my-app"\ndatabase_id = "__D1_DATABASE_ID__"\n\n[triggers]\ncrons = ["30 22 * * *"]\n';
   const out = fillToml(src, { name: 'gym-log', databaseId: 'abc-123' });
   assert.match(out, /^name = "gym-log"$/m);
   assert.match(out, /^database_name = "gym-log"$/m);
