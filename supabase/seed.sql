@@ -1,12 +1,31 @@
 -- scripts/build_map.mjs가 만든 파일(손으로 고치지 않는다). 칸 120개.
-insert into public.gus (id, name, short, type, side) values
-('mapo','마포구','마포','river','n'),
-('yongsan','용산구','용산','legend','n'),
-('jung','중구','중구','city','n'),
-('yeongdeungpo','영등포구','영등포','city','s'),
-('dongjak','동작구','동작','river','s'),
-('gwanak','관악구','관악','legend','s')
-on conflict (id) do update set name = excluded.name, short = excluded.short, type = excluded.type, side = excluded.side;
+insert into public.gus (id, name, short, type, side, open) values
+('mapo','마포구','마포','river','n',true),
+('yongsan','용산구','용산','legend','n',true),
+('jung','중구','중구','city','n',true),
+('yeongdeungpo','영등포구','영등포','city','s',true),
+('dongjak','동작구','동작','river','s',true),
+('gwanak','관악구','관악','legend','s',true),
+('jongno','종로구','종로','legend','n',false),
+('seongdong','성동구','성동','river','n',false),
+('gwangjin','광진구','광진','legend','n',false),
+('dongdaemun','동대문구','동대문','village','n',false),
+('jungnang','중랑구','중랑','village','n',false),
+('seongbuk','성북구','성북','mount','n',false),
+('gangbuk','강북구','강북','mount','n',false),
+('dobong','도봉구','도봉','mount','n',false),
+('nowon','노원구','노원','village','n',false),
+('eunpyeong','은평구','은평','mount','n',false),
+('seodaemun','서대문구','서대문','mount','n',false),
+('gangseo','강서구','강서','river','s',false),
+('yangcheon','양천구','양천','village','s',false),
+('guro','구로구','구로','village','s',false),
+('geumcheon','금천구','금천','legend','s',false),
+('seocho','서초구','서초','city','s',false),
+('gangnam','강남구','강남','city','s',false),
+('songpa','송파구','송파','city','s',false),
+('gangdong','강동구','강동','river','s',false)
+on conflict (id) do update set name = excluded.name, short = excluded.short, type = excluded.type, side = excluded.side, open = excluded.open;
 insert into public.tile_defs (id, q, r, kind, home_gu, name, edge, landmark) values
 (1,-2,-6,'land','mapo','상암',true,false),
 (2,-4,-5,'land','mapo','상암 2',true,false),

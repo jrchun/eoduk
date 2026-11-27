@@ -17,7 +17,7 @@ export function applyTiles(idx, rows) {
   return idx;
 }
 
-export const playable = c => c && c.kind !== 'river';
+export const playable = c => c && c.kind !== 'river' && !c.sealed; // 봉인된 구 칸은 게임에 쓰지 않는다
 export function ownNeighborCount(idx, id, gu) { return idx.byId.get(id).adj.filter(n => idx.byId.get(n).owner === gu).length; }
 // 칠 수 있는 칸: 강이 아니고, 우리 칸이 아니고, 우리 칸과 맞닿아 있다
 export function canAttack(idx, id, gu) {
@@ -64,7 +64,7 @@ export function troopsLocal(serverTroops, rate, fetchedAt, now) {
 }
 // 순위: 칸 수 많은 순(같으면 이름 순)
 export function rankGus(gus, counts) {
-  return [...gus].map(g => ({ ...g, tiles: counts[g.id] || 0 })).sort((a, b) => b.tiles - a.tiles || a.short.localeCompare(b.short, 'ko'));
+  return [...gus].filter(g => g.open !== false).map(g => ({ ...g, tiles: counts[g.id] || 0 })).sort((a, b) => b.tiles - a.tiles || a.short.localeCompare(b.short, 'ko'));
 }
 // 일출 리포트 한 구 요약
 export function reportLine(rep, gu, idx) {

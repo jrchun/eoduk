@@ -17,6 +17,8 @@ create table if not exists public.gus (
   type text not null check (type in ('river', 'mount', 'city', 'village', 'legend')),
   side text not null check (side in ('n', 's'))
 );
+-- 열린 구(시범 전선)만 게임에 쓴다. 봉인된 구는 화면에 지도로만 보이고 "열어 주세요" 투표를 받는다.
+alter table public.gus add column if not exists open boolean not null default true;
 create table if not exists public.tile_defs (
   id int primary key, q int not null, r int not null,
   kind text not null check (kind in ('land', 'river', 'bridge')),
@@ -73,6 +75,10 @@ create table if not exists public.flags (
   gu text not null, tile int not null references public.tile_defs (id), primary key (player, date)
 );
 create table if not exists public.presence (player uuid primary key references public.players (id) on delete cascade, tile int, seen_at timestamptz not null default now());
+create table if not exists public.gu_votes (
+  voter uuid not null references auth.users (id) on delete cascade, gu text not null references public.gus (id),
+  created_at timestamptz not null default now(), primary key (voter, gu)
+);
 create table if not exists public.game_state (id int primary key check (id = 1), tick_date date not null, tick_done int not null default 0, season date not null);
 
 -- ---------- 권한: 읽기는 공개, 쓰기는 함수로만 ----------
@@ -88,6 +94,7 @@ alter table public.seasons enable row level security;
 alter table public.flags enable row level security;
 alter table public.presence enable row level security;
 alter table public.game_state enable row level security;
+alter table public.gu_votes enable row level security;
 
 revoke insert, update, delete, truncate on all tables in schema public from anon, authenticated;
 
@@ -188,7 +195,7 @@ language plpgsql stable set search_path = '' as $$
 declare s date := private.season_of(private.kst_date(now())); n double precision; total double precision; avg double precision;
 begin
   select count(*) filter (where gu = g), count(*) into n, total from public.players where season = s;
-  avg := total / greatest(1, (select count(*) from public.gus));
+  avg := total / greatest(1, (select count(*) from public.gus where open));
   if n = 0 or avg = 0 then return 1; end if;
   return least(1.3, greatest(0.7, 1 / sqrt(n / avg)));
 end $$;
@@ -303,7 +310,7 @@ language plpgsql security definer set search_path = '' as $$
 declare res jsonb; win text;
 begin
   insert into public.daily (date, gu, season, tiles)
-  select d, g.id, private.season_of(d), (select count(*) from public.tiles t where t.owner = g.id) from public.gus g
+  select d, g.id, private.season_of(d), (select count(*) from public.tiles t where t.owner = g.id) from public.gus g where g.open
   on conflict (date, gu) do update set tiles = excluded.tiles;
   if extract(isodow from d) = 7 then
     select jsonb_object_agg(gu, tiles), (array_agg(gu order by tiles desc, gu))[1] into res, win
@@ -393,13 +400,15 @@ begin
   end if;
   return jsonb_build_object(
     'now', now(), 'phase', ph, 'me', me, 'flags', flagtop,
+    'votes', (select coalesce(jsonb_object_agg(gu, n), '{}') from (select gu, count(*) as n from public.gu_votes group by gu) v),
+    'my_votes', (select coalesce(jsonb_agg(gu), '[]') from public.gu_votes where voter = auth.uid()),
     'tiles', (select jsonb_agg(jsonb_build_array(id, owner, defense, gray) order by id) from public.tiles),
     'marches', (select coalesce(jsonb_agg(jsonb_build_object('id', id, 'gu', gu, 'src', src, 'dst', dst, 'troops', troops,
       'torch', torch, 'created_at', created_at, 'arrive_at', arrive_at, 'mine', player = auth.uid()) order by arrive_at), '[]')
       from public.marches where status = 'moving'),
     'gus', (select jsonb_agg(jsonb_build_object('id', g.id, 'players',
       (select count(*) from public.players x where x.gu = g.id and x.season = (ph ->> 'season')::date),
-      'tiles', (select count(*) from public.tiles t where t.owner = g.id)) order by g.id) from public.gus g),
+      'tiles', (select count(*) from public.tiles t where t.owner = g.id)) order by g.id) from public.gus g where g.open),
     'recent', (select coalesce(jsonb_agg(jsonb_build_object('kind', kind, 'tile', tile, 'gu', gu, 'other', other_gu, 'at', at) order by at desc), '[]')
       from (select * from public.events where at > now() - interval '30 minutes' order by at desc limit 12) e)
   );
@@ -413,7 +422,7 @@ begin
   if auth.uid() is null then raise exception '로그인이 필요해요.' using errcode = 'P0001'; end if;
   nick := btrim(coalesce(nick, ''));
   if char_length(nick) < 1 or char_length(nick) > 12 then raise exception '닉네임은 1~12자로 정해 주세요.' using errcode = 'P0001'; end if;
-  if not exists (select 1 from public.gus where id = pick) then raise exception '없는 구예요.' using errcode = 'P0001'; end if;
+  if not exists (select 1 from public.gus where id = pick and open) then raise exception '아직 열리지 않은 구예요.' using errcode = 'P0001'; end if;
   perform private.advance(true);
   s := private.season_of(private.kst_date(now()));
   select * into p from public.players where id = auth.uid();
@@ -427,7 +436,7 @@ begin
   end if;
   -- 꽉 찬 구는 신규 가입 제한: 10명 이상이면서 평균의 1.5배를 넘을 때
   select count(*) filter (where gu = pick), count(*) into n, total from public.players where season = s;
-  select count(*) into cnt from public.gus;
+  select count(*) into cnt from public.gus where open;
   if n >= 10 and n > 1.5 * (total::double precision / cnt) then
     raise exception '이 구는 인원이 꽉 찼어요. 다른 구를 골라 주세요.' using errcode = 'P0001';
   end if;
@@ -534,7 +543,7 @@ begin
     'season', s,
     'gus', (select jsonb_agg(jsonb_build_object('id', g.id, 'tiles', (select count(*) from public.tiles t where t.owner = g.id),
       'days', (select coalesce(jsonb_agg(jsonb_build_array(d.date, d.tiles) order by d.date), '[]') from public.daily d where d.gu = g.id and d.season = s)))
-      from public.gus g),
+      from public.gus g where g.open),
     'me', case when p.id is null then null else jsonb_build_object('contrib', p.contrib,
       'rank', (select count(*) + 1 from public.players x where x.gu = p.gu and x.season = s and x.contrib > p.contrib)) end,
     'top', case when p.id is null then '[]'::jsonb else (select coalesce(jsonb_agg(jsonb_build_array(nickname, contrib) order by contrib desc), '[]')
@@ -554,7 +563,19 @@ begin
     'gus', (select jsonb_agg(jsonb_build_object('id', g.id,
       'kept', (select tiles from public.daily x where x.date = d and x.gu = g.id),
       'lost', (select coalesce(jsonb_agg(e.tile order by e.at), '[]') from public.events e
-        where e.kind = 'consume' and e.gu = g.id and e.at >= st.sunset and e.at <= private.kst_midnight(d + 1)))) from public.gus g));
+        where e.kind = 'consume' and e.gu = g.id and e.at >= st.sunset and e.at <= private.kst_midnight(d + 1)))) from public.gus g where g.open));
+end $$;
+
+-- 봉인된 구 열어 주세요: 한 사람이 구마다 한 표(로그인 필요). 그 구의 표 수를 돌려준다.
+create or replace function public.vote_gu(pick text) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare n int;
+begin
+  if auth.uid() is null then raise exception '로그인이 필요해요.' using errcode = 'P0001'; end if;
+  if not exists (select 1 from public.gus where id = pick and not open) then raise exception '이미 열려 있거나 없는 구예요.' using errcode = 'P0001'; end if;
+  insert into public.gu_votes (voter, gu) values (auth.uid(), pick) on conflict do nothing;
+  select count(*) into n from public.gu_votes where gu = pick;
+  return jsonb_build_object('ok', true, 'gu', pick, 'votes', n);
 end $$;
 
 -- 추천 닉네임 중 아직 아무도 안 쓰는 것만 돌려준다(가입 전에도 부른다). 한 번에 20개까지.
@@ -582,6 +603,8 @@ revoke all on function public.game_state(), public.join_game(text, text), public
   public.reinforce(int, int), public.plant_flag(int), public.watch(int), public.ranking(), public.sunrise_report(),
   public.tick(), public.keepalive() from public;
 grant execute on function public.game_state(), public.watch(int), public.ranking(), public.sunrise_report(), public.tick(), public.keepalive() to anon, authenticated;
+revoke all on function public.vote_gu(text) from public, anon;
+grant execute on function public.vote_gu(text) to authenticated;
 revoke all on function public.nicknames_free(text[]) from public;
 grant execute on function public.nicknames_free(text[]) to anon, authenticated;
 grant execute on function public.join_game(text, text), public.send_march(int, int, int, real), public.reinforce(int, int), public.plant_flag(int) to authenticated;

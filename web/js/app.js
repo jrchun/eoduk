@@ -6,6 +6,7 @@ import { indexMap, applyTiles, canAttack, bestSource, marchPreview, incoming, ow
 import { MapView } from './map.js';
 import { startScene, drawShareCard } from './story.js';
 import { loadImages } from './sprites.js';
+import { mountSunbar } from './sunbar.js';
 import { nicknameCandidates, MAX_NICK } from './names.js';
 import { CHAT } from './links.js';
 
@@ -119,13 +120,16 @@ function render() {
   const reinforced = gu ? [...S.idx.byId.values()].filter(c => c.owner === gu && c.defense > BAL.tileStart).sort((a, b) => b.defense - a.defense).slice(0, 3).map(c => c.id) : [];
   S.map.set({ marches: g.marches, myGu: gu, selected: S.selected, flags: g.flags || [], phase: g.phase,
     incomingIds: new Set(inc.map(m => m.dst)), erodingIds: new Set(eroding), reinforced: new Set(reinforced), canMarch: !!gu && ph === 'day' });
-  // 헤더: 구 문장 / 구 이름 등불지기 / 유형 · 등불 n칸 · n위
+  // 헤더 한 줄: 우리 구 · 등불 n칸 · n위 / 병력. 둘러보는 중이면 열린 구 수와 참여하기
   const gg = gu ? guOf(gu) : null;
   const counts = countTiles(S.idx), ranked = rankGus([...S.idx.gu.values()], counts);
-  $('emblemMark').textContent = gg ? gg.short[0] : '등';
-  $('guName').textContent = gg ? `${gg.name} 등불지기` : '어둑시니';
-  $('guSub').textContent = gg ? `${TYPES[gg.type].name} · 등불 ${counts[gu] || 0}칸 · ${ranked.findIndex(x => x.id === gu) + 1}위`
-    : (S.session ? '구를 골라 주세요' : '둘러보는 중 · 시범 전선 6개 구');
+  $('whoDot').style.background = gg ? 'var(--ours)' : 'var(--muted)';
+  $('guName').textContent = gg ? gg.name : '서울';
+  $('guSub').textContent = gg ? `등불 ${counts[gu] || 0}칸 · ${ranked.findIndex(x => x.id === gu) + 1}위`
+    : `25개 구 중 ${ranked.length}개 구 열림`;
+  $('troopBox').hidden = !gg;
+  $('btnJoin').hidden = !!gg;
+  $('btnJoin').textContent = S.session ? '구 고르기' : '참여하기';
   // 아래 줄
   const bm = $('btnMarch');
   bm.textContent = ph === 'day' ? '진군' : ph === 'night' ? '밤에는 진군 불가' : '봉인 중';
@@ -182,18 +186,13 @@ function shortfall(m, c) {
 function tick() {
   const g = S.game; if (!g) return;
   const t = now(), ph = g.phase;
-  let lbl, val;
-  if (ph.phase === 'day') { lbl = ph.rush ? '마지막 러시' : '해 지기까지'; val = fmtLeft(Date.parse(ph.sunset) - t); }
-  else if (ph.phase === 'night') { lbl = ph.long_night ? '긴 밤 · 봉인까지' : '봉인까지'; val = fmtLeft(Date.parse(ph.midnight) - t); }
-  else { lbl = '해 뜨기까지'; val = fmtLeft(Date.parse(ph.sunrise) - t); }
-  $('clockLbl').textContent = lbl; $('clockVal').textContent = val;
+  S.sunbar?.(ph, t);
   const m = me();
   if (m?.active) {
-    const n = troopsLocal(m.troops, m.rate, S.fetchedAt, t), torch = Math.round(n * torchRatio());
-    $('troops').textContent = `${n}/${BAL.troopCap}`;
+    const n = troopsLocal(m.troops, m.rate, S.fetchedAt, t);
+    $('troops').textContent = `병력 ${n}/${BAL.troopCap}`;
     $('troopBar').style.width = (n / BAL.troopCap * 100) + '%';
-    $('chipTorch').textContent = `횃불 ${torch}`; $('chipLantern').textContent = `등롱 ${n - torch}`;
-  } else { $('troops').textContent = '-'; $('troopBar').style.width = '0'; $('chipTorch').textContent = '횃불 -'; $('chipLantern').textContent = '등롱 -'; }
+  }
   const gu = myGu();
   const inc = gu ? incoming(S.idx, g.marches, gu) : [];
   const warn = $('warn');
@@ -220,7 +219,7 @@ function tick() {
   warn.hidden = !target || (!!S.sheet && !isPC());
   $('guide').textContent = ph.phase === 'night' ? `지금 이 칸을 보는 사람 ${S.watchers}명 · 많이 볼수록 어둠이 커져요`
     : ph.phase === 'seal' ? '봉인 — 해가 뜨면 잿빛 칸 쟁탈이 시작돼요'
-    : !gu ? '시범 전선 6개 구가 맞붙어요 · 구를 고르면 우리 전선이 크게 보여요'
+    : !gu ? '색칠된 6개 구가 맞붙는 중 · 회색은 아직 봉인된 구예요'
     : isPC() ? '우리 칸을 끌어서 적 칸에 놓으면 진군 · 칸에 깃발을 꽂아 목표 표시' : '안개 너머는 정찰 전까지 보이지 않아요';
   $('guide').hidden = !!S.sheet && !isPC();
   $('btnFront').hidden = !!S.sheet && !isPC();
@@ -256,8 +255,29 @@ function ownerLabel(c) {
   return guOf(c.owner).name;
 }
 
+// 봉인된 구 칸: 구 이름, 열어 주세요 투표
+function openSealed(c) {
+  const g = guOf(c.home); if (!g) return;
+  const build = () => {
+    const votes = S.game?.votes?.[g.id] || 0, mine = (S.game?.my_votes || []).includes(g.id);
+    const t = TYPES[g.type];
+    const btn = !S.session
+      ? h('button', { class: 'btn primary', type: 'button', onclick: () => showOnboard('story') }, '참여하고 투표하기')
+      : h('button', { class: 'btn primary', type: 'button', disabled: mine, onclick: async e => {
+        e.target.disabled = true;
+        try { await rpc('vote_gu', { pick: g.id }); toast(`${g.name}에 한 표를 넣었어요.`); await refresh(); } catch (err) { toast(err.message); e.target.disabled = false; }
+      } }, mine ? '투표했어요' : `${g.name} 열어 주세요`);
+    return [
+      h('p', {}, `${c.name} · 아직 봉인된 땅이에요. 표가 모이면 다음 시즌에 열어요.`),
+      h('dl', { class: 'kv' }, h('dt', {}, '구 유형'), h('dd', {}, `${t.name} · ${g.symbol}`), h('dt', {}, '열어 달라는 표'), h('dd', { class: 'num' }, `${votes}표`)),
+      btn];
+  };
+  openSheet(`${g.name} · 봉인`, build(), () => { $('sheetBody').replaceChildren(...build()); });
+}
+
 function openTile(id) {
   const c = S.idx.byId.get(id); if (!c) return;
+  if (c.sealed) { S.selected = null; S.map.set({ selected: null }); return openSealed(c); }
   S.selected = id; S.map.set({ selected: id }); watchNow();
   const build = () => {
     const gu = myGu(), ph = phase();
@@ -389,6 +409,7 @@ $('warn').addEventListener('click', e => {
   if (e.target.closest('#warnBtn')) openReinforce(id); else openTile(id);
 });
 $('btnFront').addEventListener('click', () => S.map.home());
+$('btnJoin').addEventListener('click', () => showOnboard(S.session ? 'gu' : 'story'));
 $('btnMenu').addEventListener('click', openMenu);
 $('btnMenuPc').addEventListener('click', openMenu);
 $('btnSound').addEventListener('click', () => { S.sound = !S.sound; store.set('sound', S.sound ? '1' : '0'); beep(); render(); });
@@ -537,7 +558,7 @@ function showOnboard(step, i = 0) {
         h('span', { class: 'good' }, '+ ' + t.good), h('span', { class: 'bad' }, '- ' + t.bad));
     };
     const col = side => h('div', { class: 'gucol' }, h('p', { class: 'side' }, side === 'n' ? '한강 북쪽' : '한강 남쪽'),
-      [...S.idx.gu.values()].filter(g => g.side === side).map(g => {
+      [...S.idx.gu.values()].filter(g => g.side === side && g.open).map(g => {
         const c = h('button', { class: 'gucell', type: 'button', 'data-gu': g.id, onclick: () => { pickedGu = g.id; update(); } },
           h('b', {}, h('span', { class: 'dot', style: `background:var(--gu-${g.id})` }), g.name),
           h('small', {}, `${TYPES[g.type].name} · ${counts[g.id]?.players ?? 0}명`));
@@ -617,7 +638,8 @@ async function start() {
   S.mapData = map;
   S.idx = indexMap(map);
   // 시작 전 지도: 칸 중심이 속한 구가 주인
-  for (const c of S.idx.byId.values()) if (c.kind === 'land') { c.owner = c.gu; c.defense = BAL.tileStart; }
+  for (const c of S.idx.byId.values()) if (c.kind === 'land' && !c.sealed) { c.owner = c.gu; c.defense = BAL.tileStart; }
+  S.sunbar = mountSunbar($('sunbar'));
   S.map = new MapView($('map'), S.idx, {
     onTap: id => (id ? openTile(id) : S.sheet && closeSheet()),
     onDragMarch: (src, dst) => openMarch(dst, src),
