@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "name": "내 앱",
+  "summary": "한 줄 설명",
+  "category": "기타",
+  "status": "개발중",
+  "public": true,
+  "mode": "d1",
+  "repo": "",
+  "createdAt": "",
+  "updatedAt": ""
+}
