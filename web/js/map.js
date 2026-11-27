@@ -1,6 +1,7 @@
 // 지도 그리기(Canvas 2D) — 서울 전역 쿼터뷰.
 // 평면 좌표(km, map.json의 x = 동쪽, y = 남쪽)를 북쪽이 위인 익숙한 지도 방향으로 그린다.
-// X = x·0.85, Y = y·0.62 (세로를 살짝 눌러 비스듬히 내려다보는 느낌만 남김). 한강이 서→동으로 가로로 흐른다.
+// HD-2D 쿼터뷰: 남쪽에서 북쪽을 비스듬히 내려다본다. X = x·0.85, Y = y·0.46(세로를 눌러 기울임). 한강이 서→동으로 가로로 흐른다.
+// 땅은 두께가 있는 판(바깥·강 쪽 절벽), 불 켜진 칸은 살짝 솟는다(lift). 화면 위아래 흐림·비네트는 styles.css .tiltshift.
 // 보이는 순서(먼저 읽혀야 할 것부터): 서울 모양 → 구(이름) → 점령 상태(색·경계) → 움직임(진군·경고) → 칸 이름(확대했을 때만)
 // 그리는 순서: 바탕 → 칸 색 → 한강(벡터) → 경계선 → 유닛 → 안개 → 경고 테두리·이름·알약
 // 색은 styles.css의 CSS 변수(--t-*, --tile-*, --gu-*, --sealed*, --label-*, --pill-*, --fog*)에서 읽는다.
@@ -10,14 +11,15 @@ import { drawSprite, IMG, drawImageFoot } from './sprites.js';
 
 const LOW = 4;
 // 투영 행렬: 화면 = (A·x + B·y, C·x + D·y). 바꿀 때는 이 네 값만 고친다
-const A = 0.85, B = 0, C = 0, D = 0.62, DET = A * D - B * C;
+const A = 0.85, B = 0, C = 0, D = 0.46, DET = A * D - B * C;
 const fx = (x, y) => A * x + B * y, fy = (x, y) => C * x + D * y;
 const inv = (X, Y) => ({ x: (D * X - B * Y) / DET, y: (A * Y - C * X) / DET });
 const depth = (x, y) => fy(x, y); // 그리는 순서(화면 아래쪽일수록 나중)
 const CORNER = [...Array(6)].map((_, i) => { const a = Math.PI / 180 * (60 * i - 30); return [Math.cos(a), Math.sin(a)]; });
 // 이웃 방향(rules.js DIRS 순서) → 그 쪽 변의 꼭짓점 번호
+const SOUTH = [[0, 1], [-1, 1]]; // 화면 아래쪽을 보는 두 변(옆면이 보이는 쪽)
 const EDGE_OF_DIR = { '1,0': [0, 1], '-1,0': [3, 4], '0,1': [1, 2], '0,-1': [4, 5], '1,-1': [5, 0], '-1,1': [2, 3] };
-const VARS = ['--t-land', '--t-river', '--t-river-edge', '--t-wave', '--t-park', '--t-ink', '--t-bridge', '--t-bam', '--t-paper',
+const VARS = ['--t-hi', '--t-land', '--t-river', '--t-river-edge', '--t-wave', '--t-park', '--t-ink', '--t-bridge', '--t-bam', '--t-paper',
   '--tile-line', '--tile-a', '--tile-ours', '--tile-dark', '--tile-gray', '--tile-gray-line', '--tile-neutral', '--sealed', '--sealed-line', '--outline',
   '--ours-dark', '--attack', '--erode', '--label-bg', '--label-fg', '--label-muted', '--label-shadow', '--pill-enemy', '--pill-ours', '--pill-fg',
   '--fog', '--fog-a', '--cloud-line', '--cloud-fill', '--eyes', '--glow', '--fg', '--ours', '--enemy'];
@@ -78,7 +80,10 @@ export class MapView {
     const s = this.cam.s, p = inv((X - this.w / 2) / s, (Y - (this.hgt - this.inset) / 2) / s);
     return { x: this.cam.x + p.x, y: this.cam.y + p.y };
   }
-  center(c) { return this.project(c.x, c.y); }
+  // 불 켜진 칸이 솟는 높이(px). 점령 상태가 높이로도 읽히게
+  lift(c) { return !c || c.kind === 'river' || c.sealed || !c.owner ? 0 : Math.max(3, Math.min(12, this.cam.s * 0.08)); }
+  slab() { return Math.max(3, Math.min(16, this.cam.s * 0.13)); } // 땅 판 두께(px)
+  center(c) { const p = this.project(c.x, c.y); p.y -= this.lift(c); return p; }
   tileAt(X, Y) {
     const p = this.unproject(X, Y), h = pixelToHex(p.x, p.y, this.idx.size);
     return this.idx.byKey.get(key(h.q, h.r))?.id ?? null;
@@ -185,15 +190,16 @@ export class MapView {
   }
 
   // ---------- 그리기 도우미 ----------
-  hexScreen(c, shrink = 1) {
+  hexScreen(c, shrink = 1, up = this.lift(c)) {
     const g = this.g, r = this.idx.size * shrink;
     g.beginPath();
-    CORNER.forEach(([cx, cy], i) => { const p = this.project(c.x + cx * r, c.y + cy * r); i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y); });
+    CORNER.forEach(([cx, cy], i) => { const p = this.project(c.x + cx * r, c.y + cy * r); p.y -= up; i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y); });
     g.closePath();
   }
-  edge(c, dq, dr) { // 칸 c의 (dq,dr) 쪽 변(화면 좌표)
+  edge(c, dq, dr, up = this.lift(c)) { // 칸 c의 (dq,dr) 쪽 변(화면 좌표, 솟은 높이 반영)
     const [i, j] = EDGE_OF_DIR[dq + ',' + dr], r = this.idx.size;
-    return [this.project(c.x + CORNER[i][0] * r, c.y + CORNER[i][1] * r), this.project(c.x + CORNER[j][0] * r, c.y + CORNER[j][1] * r)];
+    const p = this.project(c.x + CORNER[i][0] * r, c.y + CORNER[i][1] * r), q = this.project(c.x + CORNER[j][0] * r, c.y + CORNER[j][1] * r);
+    p.y -= up; q.y -= up; return [p, q];
   }
   planeTransform() { // 평면 좌표로 바로 그리기(한강 등)
     const s = this.cam.s, o = this.project(0, 0);
@@ -251,16 +257,29 @@ export class MapView {
     if (this.mixKey !== theme + gu) { this.mixKey = theme + gu; this.mixed = {}; }
     const col = (k, base, a) => (this.mixed[k] ||= mix(base, land, a));
 
-    // 1) 칸 색: 봉인된 땅은 옅은 회색, 열린 칸은 주인 색(우리 구는 호박색). 바탕과 섞은 불투명 색
-    for (const c of this.tiles) {
-      if (c.kind === 'river' || !visible(c)) continue;
-      this.hexScreen(c, 1.02);
-      if (c.sealed) g.fillStyle = this.css('--sealed');
-      else if (c.gray) g.fillStyle = col('gray', this.css('--tile-gray'), 0.8);
-      else if (!c.owner) g.fillStyle = this.css('--tile-dark'); // 어둠(미개척)
-      else if (c.owner === gu) g.fillStyle = col('ours', this.css('--tile-ours'), tileA + 0.22);
-      else g.fillStyle = col(c.owner, this.css('--gu-' + c.owner), tileA + 0.1);
-      g.fill();
+    // 1) 칸: 북쪽(먼 쪽)부터 그려 남쪽 칸이 앞을 가린다. 아래쪽 두 변에 옆면(절벽·솟은 면), 그 위에 윗면
+    //    색은 봉인 옅은 회색, 어둠, 잿빛, 우리 구 호박색, 그 밖은 주인 색(바탕과 섞은 불투명 색)
+    const T = this.slab(), ink = this.css('--t-ink');
+    const order = this.tiles.filter(c => c.kind !== 'river' && visible(c)).sort((a, b) => depth(a.x, a.y) - depth(b.x, b.y));
+    for (const c of order) {
+      const fill = c.sealed ? this.css('--sealed') : c.gray ? col('gray', this.css('--tile-gray'), 0.8) : !c.owner ? this.css('--tile-dark')
+        : c.owner === gu ? col('ours', this.css('--tile-ours'), tileA + 0.22) : col(c.owner, this.css('--gu-' + c.owner), tileA + 0.1);
+      const L = this.lift(c);
+      for (const [dq, dr] of SOUTH) {
+        const n = idx.byKey.get(key(c.q + dq, c.r + dr));
+        const bottom = !n || n.kind === 'river' ? -T : this.lift(n);
+        if (L - bottom < 0.5) continue;
+        const [p, q] = this.edge(c, dq, dr, L), h = L - bottom;
+        g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); g.lineTo(q.x, q.y + h); g.lineTo(p.x, p.y + h); g.closePath();
+        g.fillStyle = fill; g.fill();
+        g.fillStyle = ink; g.globalAlpha = dq === 0 ? 0.42 : 0.3; g.fill(); g.globalAlpha = 1; // 빛은 왼쪽 위에서: 오른쪽 아래 면이 더 어둡다
+      }
+      this.hexScreen(c, 1.02, L); g.fillStyle = fill; g.fill();
+      if (this.hexW() >= 22) { // 윗면 북쪽 두 변에 빛 테두리(빛은 북서쪽 위에서)
+        const [a1, b1] = this.edge(c, 0, -1, L), [, b2] = this.edge(c, 1, -1, L);
+        g.beginPath(); g.moveTo(a1.x, a1.y); g.lineTo(b1.x, b1.y); g.lineTo(b2.x, b2.y);
+        g.strokeStyle = this.css('--t-hi'); g.globalAlpha = night ? 0.08 : 0.4; g.lineWidth = 1.2; g.stroke(); g.globalAlpha = 1;
+      }
     }
 
     // 2) 한강: 매끈한 벡터 띠(물가선 → 강변 공원 → 물 → 잔물결)
@@ -274,8 +293,11 @@ export class MapView {
       saet(0.62, this.css('--t-park')); saet(0.4 + 2.2 * px, this.css('--t-river-edge')); saet(0.4, this.css('--t-river'));
       path(); g.lineWidth = W + 0.3; g.strokeStyle = this.css('--t-park'); g.stroke();
       path(); g.lineWidth = W + 2.2 * px; g.strokeStyle = this.css('--t-river-edge'); g.stroke();
-      path(); g.lineWidth = W; g.strokeStyle = this.css('--t-river'); g.stroke();
-      path(); g.lineWidth = Math.max(px, 0.02); g.strokeStyle = this.css('--t-wave'); g.setLineDash([0.18, 0.32]); g.lineDashOffset = -now / 4000; g.globalAlpha = 0.55; g.stroke();
+      // 강둑 벽: 띠 전체를 어두운 벽으로 칠하고, 물은 판 두께만큼 아래로 내려 북쪽 둑에 벽면이 보이게
+      const wall = T / (s * D);
+      path(); g.lineWidth = W; g.strokeStyle = ink; g.globalAlpha = 0.55; g.stroke(); g.globalAlpha = 1;
+      g.save(); g.translate(0, wall / 2); path(); g.lineWidth = Math.max(0.1, W - wall); g.strokeStyle = this.css('--t-river'); g.stroke(); g.restore();
+      g.save(); g.translate(0, wall / 2); path(); g.lineWidth = Math.max(px, 0.02); g.strokeStyle = this.css('--t-wave'); g.setLineDash([0.18, 0.32]); g.lineDashOffset = -now / 4000; g.globalAlpha = 0.55; g.stroke(); g.restore();
       g.globalAlpha = 1; g.setLineDash([]);
       if (idx.bamseom) { const [bx, by] = idx.bamseom; g.beginPath(); g.ellipse(bx, by, 0.3, 0.1, -0.25, 0, Math.PI * 2); g.fillStyle = this.css('--t-bam'); g.fill(); }
       for (const b of idx.bridges || []) { // 다리
@@ -299,7 +321,7 @@ export class MapView {
         if (n.id < c.id && visible(n)) continue; // 같은 변을 두 번 그리지 않는다
         if (c.sealed && n.sealed) { (c.home !== n.home ? sealedLine : sealedThin).push(this.edge(c, dq, dr)); continue; }
         if (c.sealed !== n.sealed) { strong.push(this.edge(c, dq, dr)); continue; }
-        if (n.owner !== c.owner || n.gray !== c.gray) strong.push(this.edge(c, dq, dr)); else thin.push(this.edge(c, dq, dr));
+        if (n.owner !== c.owner || n.gray !== c.gray) strong.push(this.edge(c, dq, dr, Math.max(this.lift(c), this.lift(n)))); else thin.push(this.edge(c, dq, dr));
       }
     }
     const stroke = (list, col, w, a = 1, dash) => {
@@ -342,7 +364,7 @@ export class MapView {
     for (const id of st.reinforced) {
       const c = idx.byId.get(id); if (!c) continue;
       const ux = c.x - idx.size * 0.3, uy = c.y + idx.size * 0.25;
-      objs.push({ d: depth(ux, uy), draw: () => { const p = this.project(ux, uy), im = IMG['lantern-ours']; if (im && big) drawImageFoot(g, im, p.x, p.y + 6, 1); } });
+      objs.push({ d: depth(ux, uy), draw: () => { const p = this.project(ux, uy); p.y -= this.lift(c); const im = IMG['lantern-ours']; if (im && big) drawImageFoot(g, im, p.x, p.y + 6, 1); } });
     }
     for (const c of this.open) { // 구청: 꺼지지 않는 시작 등불
       if (!c.hall || !visible(c)) continue;

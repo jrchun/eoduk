@@ -1,4 +1,4 @@
-/* 어둑시니 디자인: 한지 바탕, 먹선 2px 테두리, 각진 그림자. 제목 고운바탕, 숫자 픽셀 글꼴.
+/* 어둑시니 디자인: 한지 바탕, 먹선 2px 테두리, 각진 그림자. 제목 고운바탕, 본문·숫자 고운돋움.
    테마는 게임 시간이 정한다(시스템 다크모드를 따르지 않는다): 낮 data-theme="day", 일몰~일출 data-theme="night".
    색은 아래 변수만 쓴다. 지도(canvas)도 --map-*, --gu-*, --ours, --enemy를 읽는다. */
 /* 어둑시니 v2 토큰(작업지시서 6-1). 각진 상자 + 2px 먹선 + 각진 그림자. 모서리는 둥글리지 않는다.
@@ -21,12 +21,14 @@
   --gu-mapo:#3e7c8c; --gu-yongsan:#4e6e8e; --gu-jung:#8d78ad; --gu-yeongdeungpo:#b5523b; --gu-dongjak:#5e8a5a; --gu-gwanak:#9a6a5e;
   --gu-mapo-dark:#2a5a66; --gu-yongsan-dark:#34506e; --gu-jung-dark:#5e4a7e; --gu-yeongdeungpo-dark:#8c3e2c; --gu-dongjak-dark:#3e6a3e; --gu-gwanak-dark:#6e463c;
   --label-bg:#f6efdf; --label-fg:#2b2420; --label-shadow:#2b2420; --pill-enemy:#c23a32; --pill-ours:#a87c2e; --pill-fg:#ffffff;
+  --t-hi:#fffaf0; --vignette:rgba(70, 50, 25, .28); --haze:rgba(239, 230, 210, .35);
   --fog:#efe6d2; --fog-a:.93; --cloud-line:#5a4636; --cloud-fill:#f6efdf; --map-bg:#efe6d2; --dusk:#d9773a;
   --serif:"Gowun Batang", "AppleMyungjo", serif;
   --sans:"Gowun Dodum", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   color-scheme:light;
 }
 [data-theme="night"]{
+  --t-hi:#f3e6c8; --vignette:rgba(0, 0, 0, .55); --haze:rgba(15, 12, 20, .25);
   --bg:#0f0c14; --surface:#1a1420; --sunk:#120e18; --line:#8c7a5a; --fg:#e9dfc8; --muted:#a99c86;
   --accent:#ffb547; --ours:#ffb547; --ours-dark:#a87c2e; --on-ours:#1a1206; --enemy:#d0664c; --danger:#c23a32; --on-danger:#ffffff;
   --timer:#4fe3c1; --ok:#79b07a; --bad:#e0745a;
@@ -92,7 +94,13 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(-
 .body{position:relative;flex:1 1 auto;min-height:0;display:flex}
 .stage{position:relative;flex:1 1 auto;min-height:0;overflow:hidden;border-top:2px solid var(--line);border-bottom:2px solid var(--line);background:var(--map-bg)}
 #map{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
-.warn{position:absolute;left:10px;right:10px;top:10px;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;background:var(--surface);
+/* HD-2D 느낌: 화면 위(먼 곳)·아래(가까운 곳)를 살짝 흐리게(틸트 시프트), 가장자리는 어둡게(비네트). 누르기는 지도로 통과 */
+.tiltshift{position:absolute;inset:0;pointer-events:none;z-index:1;
+  -webkit-backdrop-filter:blur(1.8px);backdrop-filter:blur(1.8px);
+  -webkit-mask-image:linear-gradient(to bottom, #000 0%, transparent 24%, transparent 80%, #000 100%);mask-image:linear-gradient(to bottom, #000 0%, transparent 24%, transparent 80%, #000 100%)}
+.tiltshift::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 75% 70% at 50% 52%, transparent 55%, var(--vignette) 100%),
+  linear-gradient(to bottom, var(--haze), transparent 30%)}
+.warn{position:absolute;z-index:2;left:10px;right:10px;top:10px;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;background:var(--surface);
   border:2px solid var(--line);box-shadow:var(--shadow);max-width:460px;cursor:pointer}
 .warn::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--danger)}
 .warn.night{border-color:var(--night-accent)}
@@ -104,8 +112,8 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(-
   font-family:var(--serif);font-weight:700;font-size:15px;box-shadow:var(--btn-hi), var(--btn-key);transition:transform .08s, box-shadow .08s}
 .warn-btn .ico{width:16px;height:16px}
 .warn.night .warn-btn{background:var(--night-accent)}
-.guide{position:absolute;left:10px;bottom:10px;max-width:calc(100% - 150px);margin:0;padding:4px 8px;font-size:12px;background:var(--surface);border:1.5px solid var(--line);line-height:1.35}
-.front{position:absolute;right:10px;bottom:12px;height:40px;padding:0 12px;display:inline-flex;align-items:center;gap:6px;border:var(--btn-bd) solid var(--line);
+.guide{position:absolute;z-index:2;left:10px;bottom:10px;max-width:calc(100% - 150px);margin:0;padding:4px 8px;font-size:12px;background:var(--surface);border:1.5px solid var(--line);line-height:1.35}
+.front{position:absolute;z-index:2;right:10px;bottom:12px;height:40px;padding:0 12px;display:inline-flex;align-items:center;gap:6px;border:var(--btn-bd) solid var(--line);
   background:var(--surface);color:var(--fg);box-shadow:var(--btn-hi), var(--btn-key);font-family:var(--serif);font-weight:700;font-size:14px;transition:transform .08s, box-shadow .08s}
 .front .ico{width:16px;height:16px}
 .toast{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);max-width:calc(100% - 24px);padding:8px 12px;z-index:3;
