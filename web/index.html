@@ -23,23 +23,23 @@
 <body>
 <div class="app" id="app">
   <header class="top">
-    <span class="brand">어둑시니</span>
-    <button class="emblem" id="emblem" type="button" aria-label="우리 구 정보">
-      <span class="mark" id="emblemMark" aria-hidden="true">등</span>
-      <span class="emblem-text"><b id="guName">어둑시니</b><small id="guSub">둘러보는 중</small></span>
-    </button>
-    <div class="troops" aria-label="병력">
-      <span class="bar" aria-hidden="true"><i id="troopBar"></i></span>
-      <span class="num troop-num" id="troops">-</span>
-      <span class="uchip" id="chipTorch">횃불 -</span>
-      <span class="uchip" id="chipLantern">등롱 -</span>
+    <!-- 시간 흐름: 일출→일몰(해), 일몰→자정→일출(달). js/sunbar.js가 그린다 -->
+    <div class="sunbar" id="sunbar" role="img" aria-label="오늘의 해와 달"></div>
+    <div class="info">
+      <span class="brand">어둑시니</span>
+      <button class="who" id="emblem" type="button">
+        <i class="dot" id="whoDot" aria-hidden="true"></i>
+        <b id="guName">둘러보는 중</b>
+        <small id="guSub"></small>
+      </button>
+      <div class="troops" id="troopBox" aria-label="병력">
+        <span class="bar" aria-hidden="true"><i id="troopBar"></i></span>
+        <span class="num troop-num" id="troops">-</span>
+      </div>
+      <button class="btn small primary" id="btnJoin" type="button">참여하기</button>
+      <button class="sq pc-only" id="btnSound" type="button" aria-label="소리 켜기">소리</button>
+      <button class="sq pc-only" id="btnMenuPc" type="button">메뉴</button>
     </div>
-    <div class="clock">
-      <span class="lbl" id="clockLbl">해 지기까지</span>
-      <span class="num timer" id="clockVal">-</span>
-    </div>
-    <button class="sq pc-only" id="btnSound" type="button" aria-label="소리 켜기">소리</button>
-    <button class="sq pc-only" id="btnMenuPc" type="button">메뉴</button>
   </header>
 
   <div class="body" id="body">

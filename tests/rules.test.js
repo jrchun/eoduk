@@ -96,29 +96,35 @@ test('밤 침식: 압력 30 + 10×틱 + 응시(최대 30), 긴 밤 1.5배', () =
   for (let k = 1; k <= 8; k++) { const e = R.erode(def, R.nightPressure(k), 'legend'); assert.equal(e.lost, false); def = e.left; }
 });
 
-test('지도: 시범 전선 6개 구, 다리 4개가 강 양쪽에 닿고, 강을 건너는 땅 이웃은 없다', () => {
+test('지도: 서울 25개 구 중 6개 구가 열림, 열린 칸 1~120(DB와 같음), 다리 4개가 강 양쪽에 닿음', () => {
   const idx = V.indexMap(map);
-  assert.equal(map.gu.length, 6);
-  const tiles = [...idx.byId.values()];
-  assert.ok(tiles.length >= 100 && tiles.length <= 160);
+  assert.equal(map.gu.length, 25);
+  assert.equal(map.gu.filter(g => g.open).length, 6);
+  const tiles = [...idx.byId.values()], open = tiles.filter(t => !t.sealed), sealed = tiles.filter(t => t.sealed);
+  assert.equal(open.length, 120);
+  assert.deepEqual(open.map(t => t.id).sort((a, b) => a - b), Array.from({ length: 120 }, (_, i) => i + 1));
+  assert.ok(sealed.length > 300 && sealed.every(t => t.id > 1000 && t.home), '봉인된 칸');
   const side = Object.fromEntries(map.gu.map(g => [g.id, g.side]));
-  for (const c of tiles.filter(t => t.kind === 'land')) {
-    for (const n of c.adj.map(id => idx.byId.get(id))) {
+  for (const c of open.filter(t => t.kind === 'land')) {
+    for (const n of c.adj.map(id => idx.byId.get(id)).filter(n => !n.sealed)) {
       if (n.kind === 'land') assert.equal(side[n.gu], side[c.gu], `${c.name}-${n.name}`);
     }
   }
-  const bridges = tiles.filter(t => t.kind === 'bridge');
+  const bridges = open.filter(t => t.kind === 'bridge');
   assert.deepEqual(bridges.map(b => b.name).sort(), ['동작대교', '마포대교', '양화대교', '한강대교']);
   for (const b of bridges) {
-    const sides = new Set(b.adj.map(id => idx.byId.get(id)).filter(n => n.kind === 'land').map(n => side[n.gu]));
+    const sides = new Set(b.adj.map(id => idx.byId.get(id)).filter(n => n.kind === 'land' && !n.sealed).map(n => side[n.gu]));
     assert.equal(sides.size, 2, b.name);
   }
-  for (const g of map.gu) assert.ok(tiles.filter(t => t.gu === g.id).length >= 10, g.id);
+  for (const g of map.gu.filter(g => g.open)) assert.ok(open.filter(t => t.gu === g.id).length >= 10, g.id);
+  // 봉인된 칸은 칠 수 없다
+  const s0 = sealed.find(t => t.kind === 'land');
+  assert.equal(V.playable(s0), false);
 });
 
 function sampleIdx() {
   const idx = V.indexMap(map);
-  V.applyTiles(idx, map.tiles.filter(t => t.kind !== 'river').map(t => [t.id, t.kind === 'bridge' ? null : t.gu, t.kind === 'bridge' ? 40 : 100, false]));
+  V.applyTiles(idx, map.tiles.filter(t => t.kind !== 'river' && !t.sealed).map(t => [t.id, t.kind === 'bridge' ? null : t.gu, t.kind === 'bridge' ? 40 : 100, false]));
   return idx;
 }
 const byName = (idx, n) => [...idx.byId.values()].find(c => c.name === n).id;
@@ -149,6 +155,7 @@ test('화면 규칙: 다가오는 공격, 진군 진행, 어둠과 맞닿은 칸
   assert.ok(V.darkFront(idx, 'jung').length >= 5);
   const ranked = V.rankGus(map.gu, V.countTiles(idx));
   assert.equal(ranked[0].id, 'gwanak');
+  assert.equal(ranked.length, 6); // 열린 구만 순위에
   assert.equal(V.troopsLocal(10, 30, 0, 3600000), 40);
 });
 
@@ -172,4 +179,18 @@ test('추천 닉네임: 인디언식, 12자 이하, 후보는 서로 다르다',
   // 패턴 셋이 모두 나온다: "~의 ~", "~고 ~"류, "~와/과 ~"
   const many = Array.from({ length: 300 }, () => suggestNickname(rand)).join('|');
   assert.match(many, /의 /); assert.match(many, /(와|과) /);
+});
+
+import { sunArc } from '../web/js/sunbar.js';
+test('시간 막대: 낮은 일출→일몰, 밤은 일몰→다음 일출(자정·침식 8번 표시)', () => {
+  const day = R.phaseAt(Date.parse('2026-11-27T12:20:00+09:00'));
+  const iso = p => ({ ...p, sunrise: new Date(p.sunrise).toISOString(), sunset: new Date(p.sunset).toISOString(), midnight: new Date(p.midnight).toISOString() });
+  const a = sunArc(iso(day), Date.parse('2026-11-27T12:20:00+09:00'));
+  assert.equal(a.kind, 'day'); assert.ok(a.t > 0.45 && a.t < 0.55);
+  const t2 = Date.parse('2026-11-27T20:00:00+09:00'), n = sunArc(iso(R.phaseAt(t2)), t2);
+  assert.equal(n.kind, 'night'); assert.equal(n.marks.length, 8);
+  assert.ok(n.t > 0 && n.t < n.midnight && n.midnight < 1);
+  assert.ok(Math.abs(n.marks[7] - n.midnight) < 1e-9);
+  const t3 = Date.parse('2026-11-28T03:00:00+09:00'), sl = sunArc(iso(R.phaseAt(t3)), t3);
+  assert.equal(sl.kind, 'night'); assert.ok(sl.t > sl.midnight && sl.t < 1);
 });

@@ -9,7 +9,7 @@ const byName = (idx, n) => [...idx.byId.values()].find(c => c.name === n);
 function sceneIdx(mapData, rows) {
   const idx = indexMap(mapData);
   if (rows?.length) applyTiles(idx, rows);
-  else for (const c of idx.byId.values()) if (c.kind === 'land') { c.owner = c.gu; c.defense = 100; }
+  else for (const c of idx.byId.values()) if (c.kind === 'land' && !c.sealed) { c.owner = c.gu; c.defense = 100; }
   return idx;
 }
 const setTile = (idx, name, owner, defense, gray = false) => { const c = byName(idx, name); if (c) Object.assign(c, { owner, defense, gray }); return c; };
@@ -61,7 +61,7 @@ function renderMapImage(idx, gu, w, h, theme = 'day') {
   const mc = document.createElement('canvas'); holder.append(mc); document.body.append(holder);
   const view = new MapView(mc, idx, {}, { interactive: false, size: { w, h }, pc: true, noFog: true, guLabels: true, dpr: 1 });
   view.set({ myGu: gu, incomingIds: new Set(), erodingIds: new Set(), reinforced: new Set(), marches: [], flags: [] });
-  const P = view.plane; view.cam.x = (P.x0 + P.x1) / 2; view.cam.y = (P.y0 + P.y1) / 2; view.cam.s = view.sFit;
+  view.fitAll();
   view.render(Date.now());
   holder.remove();
   return mc;

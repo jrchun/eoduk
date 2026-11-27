@@ -9,8 +9,9 @@
   --timer:#8c3e2c; --night-accent:#6a4a9a; --eyes:#4fe3c1; --ok:#4e7a4e; --bad:#a8432f;
   --shadow:3px 3px 0 #2b2420; --veil:rgba(43,36,32,.45);
   /* 지형 */
-  --t-land:#ede3cb; --t-island:#e8dcc0; --t-river:#7fb3aa; --t-wave:#3f7a72; --t-park:#b9c79a; --t-ink:#2b2420; --t-bridge:#c9b48a; --t-bam:#6e8f57;
-  --t-night:#0b1026; --t-night-a:0;
+  --t-land:#efe7d3; --t-paper:rgba(110, 90, 60, .14); --t-river:#94c2b8; --t-river-edge:#6b978d; --t-wave:#eef6f2; --t-park:#cdd8ad;
+  --t-ink:#2b2420; --t-bridge:#c9b48a; --t-bam:#7f9c66;
+  --sealed:#e3dccb; --sealed-line:#c2b8a2; --outline:#6a5a4a; --label-muted:#8a7d6c;
   /* 칸 */
   --tile-line:#3a2e26; --tile-a:.2; --tile-ours:#d9a441; --tile-gray:#bdb8ac; --tile-gray-line:#9c978a; --tile-neutral:#c9b48a;
   --attack:#d9363e; --erode:#9a6ae0; --glow:255, 200, 97;
@@ -28,9 +29,11 @@
   --accent:#ffb547; --ours:#ffb547; --ours-dark:#a87c2e; --on-ours:#1a1206; --enemy:#d0664c; --danger:#c23a32; --on-danger:#ffffff;
   --timer:#4fe3c1; --ok:#79b07a; --bad:#e0745a;
   --shadow:3px 3px 0 #000; --veil:rgba(0,0,0,.6);
-  --t-night-a:.62;
+  --t-land:#14111c; --t-paper:rgba(255, 255, 255, .03); --t-river:#1e3a44; --t-river-edge:#3a6a74; --t-wave:#5d8f9b; --t-park:#1d2820;
+  --t-bridge:#6b5638; --t-bam:#2f4a2c;
+  --sealed:#1b1724; --sealed-line:#332b40; --outline:#8c7a5a; --label-muted:#7a7190;
   --tile-line:#8c7a5a; --tile-a:.32; --tile-ours:#ffb547;
-  --label-bg:#1a1420; --label-fg:#e9dfc8; --label-shadow:#000;
+  --label-bg:#0f0c14; --label-fg:#e9dfc8; --label-shadow:#000;
   --fog:#0a0712; --fog-a:.96; --map-bg:#0a0712;
   color-scheme:dark;
 }
@@ -52,24 +55,34 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(-
 .app{height:100dvh;display:flex;flex-direction:column;
   padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
 .pc-only,.brand,.panel{display:none}
-.top{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"emblem clock" "troops troops";gap:8px 10px;align-items:center;
-  padding:max(8px, env(safe-area-inset-top,0px)) 12px 8px;background:var(--surface)}
-.emblem{grid-area:emblem;all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;min-width:0}
-.emblem:focus-visible{outline:2px solid var(--accent)}
-.mark{flex:0 0 auto;width:38px;height:38px;display:grid;place-items:center;border:2px solid var(--line);background:var(--ours);
-  color:var(--on-ours);font-family:var(--serif);font-weight:700;font-size:20px;box-shadow:2px 2px 0 var(--line)}
-.emblem-text{display:flex;flex-direction:column;min-width:0;line-height:1.25}
-.emblem-text b{font-family:var(--serif);font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.emblem-text small{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.clock{grid-area:clock;display:flex;flex-direction:column;align-items:flex-end;line-height:1.15}
-.lbl{font-size:12px;color:var(--muted)}
-.timer{font-size:19px;color:var(--timer)}
-.troops{grid-area:troops;display:flex;align-items:center;gap:8px;min-width:0}
-.bar{display:block;flex:1 1 auto;min-width:60px;height:10px;border:2px solid var(--line);background:var(--sunk);box-sizing:content-box}
+.top{display:flex;flex-direction:column;gap:2px;padding:max(4px, env(safe-area-inset-top,0px)) 10px 8px;background:var(--surface)}
+.sunbar{height:48px;width:100%}
+.sunbar svg{display:block;overflow:visible}
+.sb-arc{stroke:var(--line);stroke-width:1.5;stroke-dasharray:3 4;opacity:.45}
+.sb-done{stroke:var(--ours);stroke-width:2.5}
+:root[data-theme="night"] .sb-done{stroke:var(--night-accent)}
+.sb-mark{fill:var(--surface);stroke:var(--night-accent);stroke-width:1.5}
+.sb-mark.past{fill:var(--night-accent)}
+.sb-mid{stroke:var(--muted);stroke-width:1.5}
+.sb-sun{fill:var(--ours);stroke:var(--line);stroke-width:1.5}
+.sb-glow{fill:var(--ours);opacity:.3}
+.sb-moon{fill:var(--fg)}
+.sb-moon-cut{fill:var(--surface)}
+.sb-lbl{font-size:11px;fill:var(--muted);font-family:var(--sans)}
+.sb-count{font-size:15px;fill:var(--timer);font-family:var(--pixel)}
+.sb-clabel{font-size:11px;fill:var(--muted);font-family:var(--sans)}
+.info{display:flex;align-items:center;gap:10px;min-width:0}
+.who{all:unset;cursor:pointer;display:flex;align-items:baseline;gap:6px;min-width:0;flex:0 1 auto}
+.who:focus-visible{outline:2px solid var(--accent)}
+.who .dot{align-self:center;flex:0 0 auto}
+.who b{font-family:var(--serif);font-size:15px;white-space:nowrap}
+.who small{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.troops{display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0}
+.bar{display:block;flex:1 1 auto;min-width:40px;height:8px;border:2px solid var(--line);background:var(--sunk);box-sizing:content-box}
 .bar i{display:block;height:100%;background:var(--ours);width:0}
 .troop-num{font-size:13px;white-space:nowrap}
-.uchip{flex:0 0 auto;font-size:11px;padding:1px 6px;border:1.5px solid var(--line);background:var(--surface);white-space:nowrap}
-.sq{min-width:44px;height:44px;border:2px solid var(--line);background:var(--surface);box-shadow:var(--shadow);font-family:var(--serif);font-weight:700;font-size:13px;padding:0 8px}
+#btnJoin{margin-left:auto;flex:0 0 auto}
+.sq{min-width:44px;height:40px;border:2px solid var(--line);background:var(--surface);box-shadow:var(--shadow);font-family:var(--serif);font-weight:700;font-size:13px;padding:0 8px}
 
 .body{position:relative;flex:1 1 auto;min-height:0;display:flex}
 .stage{position:relative;flex:1 1 auto;min-height:0;overflow:hidden;border-top:2px solid var(--line);border-bottom:2px solid var(--line);background:var(--map-bg)}
@@ -198,12 +211,11 @@ input[type=text],input[type=email],input[type=password]{font:inherit;color:var(-
 
 /* PC(1024px 이상): 헤더 한 줄, 왼쪽 지도 + 오른쪽 패널 340px, 하단 줄 없음 */
 @media (min-width: 1024px){
-  .top{grid-template-columns:auto minmax(0,1fr) minmax(200px,320px) auto auto auto;grid-template-areas:"brand emblem troops clock sound menu";
-    padding:10px 16px;border-bottom:2px solid var(--line);gap:16px}
-  .brand{display:block;grid-area:brand;font-family:var(--serif);font-weight:700;font-size:24px}
+  .top{padding:4px 16px 10px;border-bottom:2px solid var(--line)}
+  .brand{display:block;font-family:var(--serif);font-weight:700;font-size:22px;margin-right:6px}
   .pc-only{display:inline-block}
-  #btnSound{grid-area:sound} #btnMenuPc{grid-area:menu}
-  .timer{font-size:22px}
+  .troops{max-width:320px}
+  .sb-count{font-size:18px}
   .body{padding:16px;gap:16px}
   .stage{border:2px solid var(--line);box-shadow:4px 4px 0 var(--line)}
   .panel{display:flex;flex-direction:column;gap:12px;flex:0 0 340px;overflow:auto;padding:0 4px 4px 0}
