@@ -112,14 +112,6 @@ function subscribeRealtime() {
 // ---------- 그리기 ----------
 const isPC = () => window.innerWidth >= 1024;
 const torchRatio = () => { const v = parseFloat(store.get('torch')); return Number.isFinite(v) ? v : 0.7; };
-// 고른 칸에 따라 하단 첫 버튼이 할 일: 어둠·잿빛 → 개척, 다른 연합 칸 → 진군, 우리 연합 칸 → 없음(증원 사용)
-function primaryAction(id) {
-  const side = mySide(); if (!side) return null;
-  if (!id) return 'settle';
-  if (canSettle(S.idx, id, side)) return 'settle';
-  if (canAttack(S.idx, id, side)) return 'attack';
-  return canReinforce(S.idx, id, side) ? 'own' : 'settle';
-}
 function render() {
   const g = S.game; if (!g) return;
   const ph = g.phase.phase;
@@ -606,7 +598,7 @@ function showOnboard(step, i = 0) {
         h('button', { class: 'btn primary', type: 'button', onclick: () => (i < 2 ? showOnboard('story', i + 1) : showOnboard('gu')) }, i < 2 ? '다음' : '우리 구 고르기'),
         h('div', { class: 'row', style: 'justify-content:space-between' }, close,
           h('button', { class: 'linkbtn', type: 'button', onclick: () => showOnboard('login') }, '이미 등불지기예요'))));
-    startScene(cv, i, S.mapData, S.game?.tiles);
+    startScene(cv, i, S.mapData);
     return;
   }
   if (step === 'gu') {
