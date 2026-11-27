@@ -19,7 +19,10 @@ function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 10139
 function hex2rgb(h) { const m = /^#?([0-9a-f]{6})$/i.exec(h.trim()); const n = m ? parseInt(m[1], 16) : 0; return [n >> 16, (n >> 8) & 255, n & 255]; }
 
 export class MapView {
-  constructor(canvas, idx, handlers = {}) {
+  // opts: interactive(입력 받기, 기본 true), size({w,h}: 화면 밖 장면용 고정 크기), pc(PC 배치로 볼지),
+  //       noFog(안개 끄기), zoom(기본 확대 배율). 온보딩 장면·공유 카드도 이 클래스로 그린다(실제 게임과 같은 그림).
+  constructor(canvas, idx, handlers = {}, opts = {}) {
+    this.opts = opts;
     this.cv = canvas; this.g = canvas.getContext('2d'); this.idx = idx; this.h = handlers;
     this.tiles = [...idx.byId.values()];
     this.state = { marches: [], myGu: null, selected: null, flags: [], phase: null, incomingIds: new Set(), erodingIds: new Set(), reinforced: new Set(), canMarch: false, watchers: 0 };
@@ -28,8 +31,8 @@ export class MapView {
     this.plane = { x0: Math.min(...xs) - m, x1: Math.max(...xs) + m, y0: Math.min(...ys) - m, y1: Math.max(...ys) + m };
     const px = this.tiles.flatMap(c => [KX * (c.x - c.y)]), py = this.tiles.flatMap(c => [KY * (c.x + c.y)]);
     this.proj = { x0: Math.min(...px) - 2, x1: Math.max(...px) + 2, y0: Math.min(...py) - 1.5, y1: Math.max(...py) + 1.5 };
-    this.bindInput();
-    new ResizeObserver(() => this.resize()).observe(canvas);
+    if (opts.interactive !== false) this.bindInput();
+    if (!opts.size) new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
   }
 
@@ -41,15 +44,17 @@ export class MapView {
   }
 
   resize() {
-    const r = this.cv.getBoundingClientRect();
-    const dpr = Math.min(3, window.devicePixelRatio || 1);
+    const r = this.opts.size ? { width: this.opts.size.w, height: this.opts.size.h } : this.cv.getBoundingClientRect();
+    const dpr = this.opts.dpr || Math.min(3, window.devicePixelRatio || 1);
     this.w = r.width; this.hgt = r.height; this.dpr = dpr;
     this.cv.width = Math.max(1, Math.round(r.width * dpr)); this.cv.height = Math.max(1, Math.round(r.height * dpr));
-    this.pc = window.innerWidth >= 1024;
+    this.pc = this.opts.pc ?? window.innerWidth >= 1024;
     // 기본 확대: 칸 서너 개가 화면을 채울 만큼(목업 기준). 가장 작게: 지도 전체.
-    this.sDefault = Math.min(this.pc ? 200 : 130, Math.max(84, r.width / (this.pc ? 5.2 : 4)));
+    this.sDefault = Math.min(this.pc ? 200 : 130, Math.max(84, r.width / (this.pc ? 5.2 : 4))) * (this.opts.zoom || 1);
     const P = this.proj;
-    this.sFit = Math.max(8, Math.min(r.width / (P.x1 - P.x0), r.height / (P.y1 - P.y0)));
+    // 전체 보기 배율: 지형 여백(2km)은 빼고 칸들만 화면에 꽉 차게
+    const fw = (P.x1 - P.x0) - 2.6, fh = (P.y1 - P.y0) - 2.2;
+    this.sFit = Math.max(8, Math.min((r.width - 16) / fw, (r.height - 40) / fh));
     this.readVars(); this.fogKey = null;
     if (!this.homed) this.home(); else this.clamp();
   }
@@ -83,9 +88,16 @@ export class MapView {
     const center = this.tiles.find(c => c.name === '국회의사당') || this.tiles[0];
     return this.tiles.filter(c => hexDistance(c, center) <= 1);
   }
+  // 둘러보는 중(구 없음): 지도 전체 / 우리 구가 있으면: 우리 전선을 크게
+  overview() { return !this.state.myGu; }
   home() {
-    const ts = this.focusTiles();
     this.homed = this.state.myGu || 'browse';
+    if (this.overview()) {
+      const P = this.plane;
+      this.cam.x = (P.x0 + P.x1) / 2; this.cam.y = (P.y0 + P.y1) / 2; this.cam.s = this.sFit || 20;
+      this.clamp(); return;
+    }
+    const ts = this.focusTiles();
     // 우리 칸 중 다른 구와 맞닿은 칸(전선)이 있으면 그 가운데로
     const front = ts.filter(c => c.adj.some(n => { const o = this.idx.byId.get(n); return o.kind !== 'river' && o.owner !== c.owner; }));
     const pick = front.length ? front : ts;
@@ -93,6 +105,11 @@ export class MapView {
     this.cam.y = pick.reduce((a, c) => a + c.y, 0) / pick.length;
     this.cam.s = this.sDefault || 150;
     this.clamp();
+  }
+  // 장면용: 이름으로 칸을 찾아 그 칸을 가운데에
+  look(name, zoom = 1) {
+    const c = this.tiles.find(t => t.name === name); if (!c) return;
+    this.cam.x = c.x; this.cam.y = c.y; this.cam.s = this.sDefault * zoom; this.clamp();
   }
   focus(id) {
     const c = this.idx.byId.get(id); if (!c) return;
@@ -250,11 +267,12 @@ export class MapView {
 
   // ---------- 그리기 ----------
   render(now) {
-    const theme = document.documentElement.dataset.theme || 'day';
+    const theme = this.opts.theme || this.cv.closest?.('[data-theme]')?.dataset.theme || document.documentElement.dataset.theme || 'day';
     if (theme !== this.theme) { this.theme = theme; this.readVars(); this.terrain = null; this.fogKey = null; }
     const g = this.g, st = this.state, night = theme === 'night', s = this.cam.s, idx = this.idx;
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.fillStyle = this.css('--fog'); g.fillRect(0, 0, this.cv.width, this.cv.height);
+    const fogOn = !this.opts.noFog && !this.overview();
+    g.fillStyle = fogOn ? this.css('--fog') : this.css('--t-land'); g.fillRect(0, 0, this.cv.width, this.cv.height);
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     // 1) 바닥: 확대가 바뀌면 잠시 늘려 그리고, 멈추면 다시 만든다
     if (!this.terrain) this.makeTerrain();
@@ -341,13 +359,12 @@ export class MapView {
     }
     objs.sort((p, q) => p.d - q.d).forEach(o2 => o2.draw());
 
-    // 4) 안개
+    // 4) 안개(둘러보기·안개 끄기면 없음)
     const fk = [Math.round(this.cam.x * 200), Math.round(this.cam.y * 200), Math.round(s * 10), this.inset, gu, this.w, this.hgt, theme,
       this.tiles.filter(c => c.owner === gu).length].join('|');
-    if (fk !== this.fogKey) { this.makeFog(); this.fogKey = fk; }
-    g.imageSmoothingEnabled = false;
-    g.drawImage(this.fogCanvas, 0, 0, this.fogCanvas.width * LOW, this.fogCanvas.height * LOW);
-    for (const [x, y, a] of this.fogMarks) {
+    if (fogOn && fk !== this.fogKey) { this.makeFog(); this.fogKey = fk; }
+    if (fogOn) { g.imageSmoothingEnabled = false; g.drawImage(this.fogCanvas, 0, 0, this.fogCanvas.width * LOW, this.fogCanvas.height * LOW); }
+    for (const [x, y, a] of fogOn ? this.fogMarks : []) {
       const p = this.project(x, y);
       if (night) this.eyes(p.x, p.y, now, a); else this.cloud(p.x, p.y, Math.max(10, Math.min(22, s * 0.12)));
     }
@@ -369,7 +386,7 @@ export class MapView {
       if (this.drag.hover) { const c = idx.byId.get(this.drag.hover); this.hexScreen(c, 0.9); g.strokeStyle = this.css('--ours'); g.lineWidth = 4; g.stroke(); }
     }
     // 이름표: 중요한 것부터 그리고, 이미 그린 이름표와 겹치면 건너뛴다
-    const bigEnough = this.hexW() >= 70;
+    const bigEnough = this.hexW() >= 70 && !this.opts.guLabels;
     const fs = this.pc ? 16 : (this.hexW() >= 110 ? 15 : 13);
     const cands = [];
     for (const c of this.tiles) {
@@ -384,6 +401,21 @@ export class MapView {
     cands.sort((a, b) => a.pri - b.pri || a.c.id - b.c.id);
     g.font = `700 ${fs}px "Gowun Dodum", sans-serif`;
     const placed = [];
+    // 줄여 볼 때는 칸 이름 대신 구 이름표(구 이름 + 등불 칸 수)를 먼저
+    if (!bigEnough) {
+      const gfs = this.pc ? 18 : 15;
+      g.font = `700 ${gfs}px "Gowun Batang", serif`;
+      for (const gg of idx.gu.values()) {
+        const own = this.tiles.filter(c => c.owner === gg.id); if (!own.length) continue;
+        const x = own.reduce((a, c) => a + c.x, 0) / own.length, y = own.reduce((a, c) => a + c.y, 0) / own.length, p = this.project(x, y);
+        const text = `${gg.name} ${own.length}`, w = Math.ceil(g.measureText(text).width) + 20, h = gfs + 14;
+        let y0 = p.y; // 다른 구 이름표와 겹치면 아래로 비켜 놓는다
+        for (let k = 0; k < 6 && placed.some(r => p.x - w / 2 < r.l + r.w + 3 && p.x + w / 2 + 3 > r.l && y0 - h / 2 < r.t + r.h + 3 && y0 + h / 2 + 3 > r.t); k++) y0 += h * 0.6;
+        placed.push({ l: p.x - w / 2, t: y0 - h / 2, w, h });
+        this.label(text, p.x, y0, gg.id === gu ? this.css('--ours-dark') : this.css('--gu-' + gg.id + '-dark'), gfs, 'serif');
+      }
+      g.font = `700 ${fs}px "Gowun Dodum", sans-serif`;
+    }
     for (const { c, p } of cands) {
       const w = Math.ceil(g.measureText(c.name).width) + 16, h = fs + 12, l = p.x - w / 2, t = p.y + 18 - h / 2;
       if (placed.some(r => l < r.l + r.w + 3 && l + w + 3 > r.l && t < r.t + r.h + 3 && t + h + 3 > r.t)) continue;
@@ -400,9 +432,9 @@ export class MapView {
     }
   }
 
-  label(text, x, y, border, fs) {
+  label(text, x, y, border, fs, face) {
     const g = this.g;
-    g.font = `700 ${fs}px "Gowun Dodum", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = face === 'serif' ? `700 ${fs}px "Gowun Batang", serif` : `700 ${fs}px "Gowun Dodum", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
     const w = Math.ceil(g.measureText(text).width) + 16, h = fs + 12, l = Math.round(x - w / 2), t = Math.round(y - h / 2);
     g.fillStyle = this.css('--label-shadow'); g.fillRect(l + 3, t + 3, w, h);
     g.fillStyle = border; g.fillRect(l, t, w, h);

@@ -21,6 +21,8 @@ Cloudflare·Supabase 연결은 MCP(브라우저 로그인)로 한다. **API 토�
 - **Supabase 모드**(사람마다 로그인). 규칙 판정은 전부 `supabase/schema.sql`의 함수에 있다. 표는 읽기만 열고, 쓰기는 `security definer` 함수로만 한다. 내부 함수는 `private` 스키마.
 - 숫자를 바꾸면 `web/js/rules.js`(화면 미리보기·테스트)와 `supabase/schema.sql`(실제 판정) **둘 다** 고친다.
 - `web/js/`: `rules.js`·`view.js`는 순수 함수(테스트 `tests/rules.test.js`), `map.js` 지도 그리기, `sprites.js` 도트 그림, `story.js` 온보딩·공유 카드, `app.js` 화면 동작.
+- **온보딩 그림·공유 카드 지도는 따로 그리지 않는다.** `story.js`가 실제 지도 그리기(`MapView`, `opts.size`·`interactive:false`)로 장면을 만든다. 그래서 지도 디자인을 바꾸면 온보딩도 저절로 같이 바뀐다. 장면 연출(잿빛 칸, 진군 등)만 `SCENES`에서 고친다. 새 홍보·안내 그림이 필요해도 같은 방식으로 만든다.
+- 둘러보는 중(구 없음)에는 지도 전체를 안개 없이 보여 준다. 줄여 보면 칸 이름 대신 구 이름표(구 이름 + 등불 칸 수).
 - 테마는 게임 시간이 정한다(낮 `data-theme="day"`, 밤·봉인 `night`). 시스템 다크모드를 따르지 않는다. "라이트·다크 확인"은 낮·밤 두 테마로 한다.
 - 지도는 `scripts/build_map.mjs`가 `data/geo`에서 만든다(`web/data/map.json`, `supabase/seed.sql`). 칸 번호가 바뀌므로 시즌 사이에만 바꾼다.
 - `src/jobs.js`: 10분마다(`*/10 * * * *`) `rpc/tick`. 진군 도착은 지연 계산이라 이 작업은 예비이고, 밤 침식·자정 기록·시즌 정산을 맡는다.

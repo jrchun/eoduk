@@ -1,68 +1,77 @@
-// 온보딩 세계관 3컷과 일출 리포트 공유 카드(Canvas). 색은 CSS 변수에서 읽는다.
-import { drawSprite, IMG, drawImageFoot } from './sprites.js';
-import { hexToPixel } from './rules.js';
+// 온보딩 3컷과 일출 리포트 공유 카드.
+// 그림을 따로 그리지 않고 실제 게임 지도(MapView)로 장면을 만든다. 지도 디자인이 바뀌면 온보딩·공유 카드도 저절로 같이 바뀐다.
+// 장면은 그때의 실제 칸 상태 위에 연출용 상태(잿빛 칸, 진군, 공격 경고)만 얹는다.
+import { MapView } from './map.js';
+import { indexMap, applyTiles, darkFront } from './view.js';
 
-const v = (el, n) => getComputedStyle(el).getPropertyValue(n).trim();
-function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+const MIN = 60000;
+const byName = (idx, n) => [...idx.byId.values()].find(c => c.name === n);
+function sceneIdx(mapData, rows) {
+  const idx = indexMap(mapData);
+  if (rows?.length) applyTiles(idx, rows);
+  else for (const c of idx.byId.values()) if (c.kind === 'land') { c.owner = c.gu; c.defense = 100; }
+  return idx;
+}
+const setTile = (idx, name, owner, defense, gray = false) => { const c = byName(idx, name); if (c) Object.assign(c, { owner, defense, gray }); return c; };
 
-// 낮은 지평선 위 헥스 땅과 등불들. i: 0 해 지는 도시와 눈, 1 등불 쟁탈, 2 홀로 남은 등불지기
-export function drawStory(cv, i) {
-  const g = cv.getContext('2d'), W = cv.width, H = cv.height, R = rng(i + 3);
-  g.imageSmoothingEnabled = false;
-  const sky = g.createLinearGradient(0, 0, 0, H);
-  if (i === 0) { sky.addColorStop(0, '#2a2438'); sky.addColorStop(0.6, v(cv, '--dusk')); sky.addColorStop(1, '#f0c27a'); }
-  else if (i === 1) { sky.addColorStop(0, v(cv, '--map-bg')); sky.addColorStop(1, v(cv, '--sunk')); }
-  else { sky.addColorStop(0, '#0d0e15'); sky.addColorStop(1, '#1d2030'); }
-  g.fillStyle = sky; g.fillRect(0, 0, W, H);
-  if (i === 0) { g.fillStyle = '#f6d27a'; g.beginPath(); g.arc(W * 0.7, H * 0.66, 26, Math.PI, 0); g.fill(); }
-  // 땅: 헥스 한 줄
-  const gus = ['--gu-mapo', '--gu-yongsan', '--gu-jung', '--gu-yeongdeungpo', '--gu-dongjak', '--gu-gwanak'];
-  const ink = v(cv, '--t-ink');
-  for (let k = 0; k < 9; k++) {
-    const x = 18 + k * 36, y = H - 34 + (k % 2) * 8;
-    g.beginPath();
-    for (let c = 0; c < 6; c++) { const a = Math.PI / 180 * (60 * c - 30); g[c ? 'lineTo' : 'moveTo'](x + Math.cos(a) * 21, y + Math.sin(a) * 21); }
-    g.closePath();
-    const dark = i === 2 && k !== 4;
-    g.fillStyle = dark ? '#2a2a30' : v(cv, gus[(k + i) % 6]); g.fill();
-    g.strokeStyle = ink; g.lineWidth = 2; g.stroke();
-    if (!dark) drawSprite(g, 'lantern', x, y - 6, 2);
-    else drawSprite(g, 'lanternOff', x, y - 6, 2);
-  }
-  if (i === 0) { // 가장자리에서 눈을 뜨는 어둑시니
-    const fog = g.createLinearGradient(0, 0, W * 0.5, 0); fog.addColorStop(0, 'rgba(10,10,16,.95)'); fog.addColorStop(1, 'rgba(10,10,16,0)');
-    g.fillStyle = fog; g.fillRect(0, 0, W * 0.5, H);
-    drawSprite(g, 'eye', 40, 46, 3); drawSprite(g, 'eye', 84, 50, 3);
-  }
-  if (i === 1) { // 진군선과 두 무리
-    g.setLineDash([6, 5]); g.strokeStyle = v(cv, '--ours'); g.lineWidth = 3;
-    g.beginPath(); g.moveTo(60, 120); g.lineTo(240, 96); g.stroke(); g.setLineDash([]);
-    if (IMG['torch-ours'] && IMG['torch-enemy']) {
-      drawImageFoot(g, IMG['torch-ours'], 110, 128, 1); drawImageFoot(g, IMG['torch-ours'], 146, 124, 1);
-      drawImageFoot(g, IMG['torch-enemy'], 238, 100, 1, true);
-    } else {
-      drawSprite(g, 'walkA', 120, 100, 3, v(cv, '--ours')); drawSprite(g, 'walkB', 150, 96, 3, v(cv, '--ours'));
-      drawSprite(g, 'walkA', 250, 74, 3, v(cv, '--enemy'));
-    }
-    drawSprite(g, 'flag', 268, 50, 3, v(cv, '--enemy'));
-  }
-  if (i === 2) { // 등불지기 하나, 둘레의 빛, 사방의 눈
-    const rg = g.createRadialGradient(W / 2, H - 50, 4, W / 2, H - 50, 90);
-    rg.addColorStop(0, 'rgba(255,214,120,.55)'); rg.addColorStop(1, 'rgba(255,214,120,0)');
-    g.fillStyle = rg; g.fillRect(0, 0, W, H);
-    if (IMG['lantern-ours']) drawImageFoot(g, IMG['lantern-ours'], W / 2, H - 40, 2);
-    else drawSprite(g, 'walkA', W / 2, H - 78, 4, v(cv, '--ours'));
-    for (let k = 0; k < 5; k++) drawSprite(g, 'eye', 30 + R() * (W - 60), 20 + R() * 60, 2);
-  }
+// 0: 해가 지면 어둠이 가장자리부터 먹는다 / 1: 낮에는 등불을 빼앗는다 / 2: 불을 밝힌 땅만 내일을 맞는다
+export const SCENES = [
+  { theme: 'night', setup(idx) {
+    for (const n of ['상암 2', '상암 4', '상암 5', '성산']) setTile(idx, n, null, 0, true);
+    return { state: { myGu: 'mapo', erodingIds: new Set(darkFront(idx, 'mapo').map(c => c.id)) }, look: ['망원', 1] };
+  } },
+  { theme: 'day', fast: true, setup(idx, base) {
+    const bridge = setTile(idx, '마포대교', 'yeongdeungpo', 60), yong = setTile(idx, '용강', 'mapo', 100), seo = setTile(idx, '서강', 'mapo', 100);
+    const at = (a, b) => ({ created_at: new Date(base).toISOString(), arrive_at: new Date(base + a * MIN).toISOString(), torch: b });
+    const marches = [
+      { id: 1, gu: 'mapo', src: seo.id, dst: bridge.id, troops: 60, ...at(11, 0.8) },
+      { id: 2, gu: 'yeongdeungpo', src: bridge.id, dst: yong.id, troops: 90, ...at(13, 0.9) },
+    ];
+    return { state: { myGu: 'mapo', marches, incomingIds: new Set([yong.id]), flags: [[bridge.id, 3]] }, look: ['마포대교', 1] };
+  } },
+  { theme: 'night', setup(idx) {
+    const a = setTile(idx, '용강', 'mapo', 210), b = setTile(idx, '서강', 'mapo', 180);
+    return { state: { myGu: 'mapo', reinforced: new Set([a.id, b.id]) }, look: ['신수', 1] };
+  } },
+];
+
+// 온보딩 캔버스에 장면 i를 그리고 움직인다. 캔버스가 화면에서 빠지면 저절로 멈춘다.
+export function startScene(cv, i, mapData, rows) {
+  const sc = SCENES[i], r = cv.getBoundingClientRect();
+  cv.dataset.theme = sc.theme;
+  const idx = sceneIdx(mapData, rows), base = Date.now();
+  const { state, look } = sc.setup(idx, base);
+  const view = new MapView(cv, idx, {}, { interactive: false, size: { w: Math.max(200, r.width), h: Math.max(110, r.height) }, pc: false, zoom: 0.9 });
+  view.set({ incomingIds: new Set(), erodingIds: new Set(), reinforced: new Set(), marches: [], flags: [], ...state });
+  view.look(...look);
+  const t0 = performance.now();
+  const loop = () => {
+    if (!cv.isConnected) return;
+    const el = performance.now() - t0;
+    view.render(sc.fast ? base + (el * 40) % (11 * MIN) : Date.now());
+    requestAnimationFrame(loop);
+  };
+  loop();
 }
 
-// 1080×1350 공유 카드: 한지 바탕, 큰 글씨, 우리 구 등불 지도
+// 지도 한 장(전체, 안개 없음, 우리 구 강조)을 화면 밖에서 그려 돌려준다
+function renderMapImage(idx, gu, w, h, theme = 'day') {
+  const holder = document.createElement('div');
+  holder.dataset.theme = theme; holder.style.cssText = 'position:fixed;left:-99999px;top:0';
+  const mc = document.createElement('canvas'); holder.append(mc); document.body.append(holder);
+  const view = new MapView(mc, idx, {}, { interactive: false, size: { w, h }, pc: true, noFog: true, guLabels: true, dpr: 1 });
+  view.set({ myGu: gu, incomingIds: new Set(), erodingIds: new Set(), reinforced: new Set(), marches: [], flags: [] });
+  const P = view.plane; view.cam.x = (P.x0 + P.x1) / 2; view.cam.y = (P.y0 + P.y1) / 2; view.cam.s = view.sFit;
+  view.render(Date.now());
+  holder.remove();
+  return mc;
+}
+
+// 1080×1350 공유 카드: 한지 바탕, 큰 글씨, 실제 지도
 export function drawShareCard(cv, { idx, gu, guName, kept, lost, night }) {
-  const g = cv.getContext('2d'), W = cv.width, H = cv.height, root = document.documentElement;
-  const col = n => v(root, n);
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  const v = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   g.fillStyle = '#efe6d2'; g.fillRect(0, 0, W, H);
-  const R = rng(9); g.strokeStyle = 'rgba(120,100,70,.14)';
-  for (let k = 0; k < 2600; k++) { const x = R() * W, y = R() * H, a = R() * Math.PI; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * 14, y + Math.sin(a) * 14); g.stroke(); }
   g.strokeStyle = '#2b2420'; g.lineWidth = 8; g.strokeRect(40, 40, W - 80, H - 80);
   g.fillStyle = '#2b2420'; g.textAlign = 'center';
   g.font = '700 64px "Gowun Batang", serif'; g.fillText('어둑시니', W / 2, 150);
@@ -71,23 +80,11 @@ export function drawShareCard(cv, { idx, gu, guName, kept, lost, night }) {
   g.font = '48px "Gowun Dodum", sans-serif';
   g.fillText(`등불 ${kept ?? '?'}칸을 지켰고`, W / 2, 410);
   g.fillText(`${lost}칸을 어둠에 내줬어요`, W / 2, 475);
-  // 지도
-  const tiles = [...idx.byId.values()], S = 30;
-  const pts = tiles.map(c => hexToPixel(c.q, c.r, S));
-  const x0 = Math.min(...pts.map(p => p.x)), x1 = Math.max(...pts.map(p => p.x)), y0 = Math.min(...pts.map(p => p.y)), y1 = Math.max(...pts.map(p => p.y));
-  const ox = W / 2 - (x0 + x1) / 2, oy = 560 - y0 + 20;
-  tiles.forEach((c, k) => {
-    const { x, y } = pts[k], cx = x + ox, cy = y + oy;
-    g.beginPath();
-    for (let n = 0; n < 6; n++) { const a = Math.PI / 180 * (60 * n - 30); g[n ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * S, cy + Math.sin(a) * S); }
-    g.closePath();
-    g.fillStyle = c.kind === 'river' ? '#a9bfba' : c.gray ? '#8f8a80' : c.owner === gu ? '#d9a441' : c.owner ? '#d8ccb2' : '#cdb08a';
-    g.fill(); g.strokeStyle = '#2b2420'; g.lineWidth = 2; g.stroke();
-    if (c.owner === gu) drawSprite(g, 'lantern', cx, cy, 3);
-  });
+  const map = renderMapImage(idx, gu, 900, 640);
+  g.drawImage(map, 90, 510, 900, 640);
+  g.strokeStyle = '#2b2420'; g.lineWidth = 4; g.strokeRect(90, 510, 900, 640);
   g.fillStyle = '#2b2420'; g.font = '700 40px "Gowun Batang", serif';
-  g.fillText('해 지기 전에 등불을 지켜라', W / 2, H - 150);
-  g.font = '32px "Gowun Dodum", sans-serif'; g.fillStyle = '#6e6253';
-  g.fillText(location.host || 'eoduk.woongstudio.com', W / 2, H - 95);
-  void col;
+  g.fillText('해 지기 전에 등불을 지켜라', W / 2, H - 140);
+  g.font = '32px "Gowun Dodum", sans-serif'; g.fillStyle = v('--muted') || '#6e6253';
+  g.fillText(location.host || 'eoduk.woongstudio.com', W / 2, H - 88);
 }
