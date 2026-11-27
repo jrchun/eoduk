@@ -17,7 +17,7 @@
 <meta name="apple-mobile-web-app-title" content="어둑시니">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -38,7 +38,7 @@
       </div>
       <button class="btn small primary" id="btnJoin" type="button">참여하기</button>
       <button class="sq pc-only" id="btnSound" type="button" aria-label="소리 켜기">소리</button>
-      <button class="sq pc-only" id="btnMenuPc" type="button">메뉴</button>
+      <button class="sq menu" id="btnMenuPc" type="button" aria-label="메뉴"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span class="pc-only">메뉴</span><i class="badge" id="menuBadge" hidden></i></button>
     </div>
   </header>
 
@@ -71,14 +71,6 @@
     </aside>
   </div>
 
-  <nav class="bottom">
-    <p class="flagline"><span class="tag"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4"/><path d="M6 4h10l-2 3.5L16 11H6"/></svg><span id="flagTag">깃발 최다</span></span><span id="flagText">아직 깃발이 없어요</span></p>
-    <div class="acts">
-      <button type="button" id="btnMarch" class="act primary"><svg class="ico ico-day" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V4"/><path d="M5 4h11l-2.5 3.5L16 11H5"/></svg><svg class="ico ico-night" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/></svg><span id="marchLbl">진군</span></button>
-      <button type="button" id="btnReinforce" class="act"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5.5c0 4.5-3 7.6-7 9.5-4-1.9-7-5-7-9.5V6z"/><path d="M12 8.5v7M8.5 12h7"/></svg><span>증원</span></button>
-      <button type="button" id="btnMenu" class="act menu" aria-label="메뉴"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><i class="badge" id="menuBadge" hidden></i></button>
-    </div>
-  </nav>
 </div>
 
 <!-- 온보딩: 세계관 3컷 → 구 고르기 → 등불지기 등록 → 홈 화면 추가 -->

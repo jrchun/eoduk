@@ -1,5 +1,6 @@
 // 지도 그리기(Canvas 2D) — 서울 전역 쿼터뷰.
-// 평면 좌표(km, map.json의 x·y)를 X = (x - y)·0.6, Y = (x + y)·0.3 으로 투영한다.
+// 평면 좌표(km, map.json의 x = 동쪽, y = 남쪽)를 북쪽이 위인 익숙한 지도 방향으로 그린다.
+// X = x·0.85, Y = y·0.62 (세로를 살짝 눌러 비스듬히 내려다보는 느낌만 남김). 한강이 서→동으로 가로로 흐른다.
 // 보이는 순서(먼저 읽혀야 할 것부터): 서울 모양 → 구(이름) → 점령 상태(색·경계) → 움직임(진군·경고) → 칸 이름(확대했을 때만)
 // 그리는 순서: 바탕 → 칸 색 → 한강(벡터) → 경계선 → 유닛 → 안개 → 경고 테두리·이름·알약
 // 색은 styles.css의 CSS 변수(--t-*, --tile-*, --gu-*, --sealed*, --label-*, --pill-*, --fog*)에서 읽는다.
@@ -7,7 +8,12 @@ import { pixelToHex, key, hexDistance, fmtLeft, DIRS } from './rules.js';
 import { marchProgress } from './view.js';
 import { drawSprite, IMG, drawImageFoot } from './sprites.js';
 
-const KX = 0.6, KY = 0.3, LOW = 4;
+const LOW = 4;
+// 투영 행렬: 화면 = (A·x + B·y, C·x + D·y). 바꿀 때는 이 네 값만 고친다
+const A = 0.85, B = 0, C = 0, D = 0.62, DET = A * D - B * C;
+const fx = (x, y) => A * x + B * y, fy = (x, y) => C * x + D * y;
+const inv = (X, Y) => ({ x: (D * X - B * Y) / DET, y: (A * Y - C * X) / DET });
+const depth = (x, y) => fy(x, y); // 그리는 순서(화면 아래쪽일수록 나중)
 const CORNER = [...Array(6)].map((_, i) => { const a = Math.PI / 180 * (60 * i - 30); return [Math.cos(a), Math.sin(a)]; });
 // 이웃 방향(rules.js DIRS 순서) → 그 쪽 변의 꼭짓점 번호
 const EDGE_OF_DIR = { '1,0': [0, 1], '-1,0': [3, 4], '0,1': [1, 2], '0,-1': [4, 5], '1,-1': [5, 0], '-1,1': [2, 3] };
@@ -33,7 +39,7 @@ export class MapView {
     this.plane = { x0: Math.min(...xs) - m, x1: Math.max(...xs) + m, y0: Math.min(...ys) - m, y1: Math.max(...ys) + m };
     // 투영된 지도 범위(칸 꼭짓점 기준): 전체 보기 배율과 정가운데 계산에 쓴다
     const px = [], py = [];
-    for (const c of this.tiles) for (const [cx, cy] of CORNER) { const x = c.x + cx * m, y = c.y + cy * m; px.push(KX * (x - y)); py.push(KY * (x + y)); }
+    for (const c of this.tiles) for (const [cx, cy] of CORNER) { const x = c.x + cx * m, y = c.y + cy * m; px.push(fx(x, y)); py.push(fy(x, y)); }
     this.proj = { x0: Math.min(...px), x1: Math.max(...px), y0: Math.min(...py), y1: Math.max(...py) };
     this.river = smooth(idx.river || []);
     this.saet = smooth(idx.saetgang || []); // 여의도 남쪽 샛강
@@ -56,7 +62,7 @@ export class MapView {
     this.w = r.width; this.hgt = r.height; this.dpr = dpr;
     this.cv.width = Math.max(1, Math.round(r.width * dpr)); this.cv.height = Math.max(1, Math.round(r.height * dpr));
     this.pc = this.opts.pc ?? window.innerWidth >= 1024;
-    this.sDefault = Math.min(this.pc ? 200 : 130, Math.max(84, r.width / (this.pc ? 5.2 : 4))) * (this.opts.zoom || 1);
+    this.sDefault = Math.min(this.pc ? 200 : 110, Math.max(64, r.width / (this.pc ? 5.2 : 5.6))) * (this.opts.zoom || 1); // 폰: 구청 둘레 두세 겹이 보이는 배율
     const P = this.proj;
     this.sFit = Math.max(6, Math.min((r.width - 20) / (P.x1 - P.x0), (r.height - 44) / (P.y1 - P.y0)));
     this.readVars(); this.fogKey = null;
@@ -66,11 +72,11 @@ export class MapView {
   // ---------- 좌표 ----------
   project(x, y) {
     const dx = x - this.cam.x, dy = y - this.cam.y, s = this.cam.s;
-    return { x: this.w / 2 + s * KX * (dx - dy), y: (this.hgt - this.inset) / 2 + s * KY * (dx + dy) };
+    return { x: this.w / 2 + s * fx(dx, dy), y: (this.hgt - this.inset) / 2 + s * fy(dx, dy) };
   }
   unproject(X, Y) {
-    const s = this.cam.s, a = (X - this.w / 2) / (KX * s), b = (Y - (this.hgt - this.inset) / 2) / (KY * s);
-    return { x: this.cam.x + (a + b) / 2, y: this.cam.y + (b - a) / 2 };
+    const s = this.cam.s, p = inv((X - this.w / 2) / s, (Y - (this.hgt - this.inset) / 2) / s);
+    return { x: this.cam.x + p.x, y: this.cam.y + p.y };
   }
   center(c) { return this.project(c.x, c.y); }
   tileAt(X, Y) {
@@ -88,10 +94,10 @@ export class MapView {
   // 칸 묶음의 투영 범위 정가운데를 화면 가운데에, 화면을 채우는 배율로
   fitTiles(list) {
     const m = this.idx.size, px = [], py = [];
-    for (const c of list) for (const [cx, cy] of CORNER) { const x = c.x + cx * m, y = c.y + cy * m; px.push(KX * (x - y)); py.push(KY * (x + y)); }
+    for (const c of list) for (const [cx, cy] of CORNER) { const x = c.x + cx * m, y = c.y + cy * m; px.push(fx(x, y)); py.push(fy(x, y)); }
     const x0 = Math.min(...px), x1 = Math.max(...px), y0 = Math.min(...py), y1 = Math.max(...py);
-    const a = (x0 + x1) / 2 / KX, b = (y0 + y1) / 2 / KY;
-    this.cam.x = (a + b) / 2; this.cam.y = (b - a) / 2;
+    const c0 = inv((x0 + x1) / 2, (y0 + y1) / 2);
+    this.cam.x = c0.x; this.cam.y = c0.y;
     this.cam.s = Math.min((this.w - 24) / (x1 - x0), (this.hgt - this.inset - 56) / (y1 - y0));
     this.clamp();
   }
@@ -159,8 +165,8 @@ export class MapView {
       const p = pos(e);
       if (!d.moved && Math.hypot(p.x - d.start.x, p.y - d.start.y) > 8) { d.moved = true; d.mode = d.mode === 'march?' ? 'march' : 'pan'; }
       if (d.mode === 'pan') {
-        const s = this.cam.s, ax = (p.x - d.last.x) / (KX * s), by = (p.y - d.last.y) / (KY * s);
-        this.cam.x -= (ax + by) / 2; this.cam.y -= (by - ax) / 2; this.clamp();
+        const s = this.cam.s, dv = inv((p.x - d.last.x) / s, (p.y - d.last.y) / s);
+        this.cam.x -= dv.x; this.cam.y -= dv.y; this.clamp();
       }
       if (d.mode === 'march') d.hover = this.tileAt(p.x, p.y);
       d.last = p;
@@ -191,7 +197,7 @@ export class MapView {
   }
   planeTransform() { // 평면 좌표로 바로 그리기(한강 등)
     const s = this.cam.s, o = this.project(0, 0);
-    this.g.setTransform(this.dpr * KX * s, this.dpr * KY * s, -this.dpr * KX * s, this.dpr * KY * s, this.dpr * o.x, this.dpr * o.y);
+    this.g.setTransform(this.dpr * A * s, this.dpr * C * s, this.dpr * B * s, this.dpr * D * s, this.dpr * o.x, this.dpr * o.y);
   }
   makePaper() { // 아주 옅은 종이 결(작은 무늬를 반복)
     const c = document.createElement('canvas'); c.width = c.height = 96;
@@ -283,7 +289,7 @@ export class MapView {
     }
 
     // 3) 경계선: 점령 경계만 또렷하게, 같은 구 안은 아주 옅게, 서울 바깥선, 봉인된 구 사이 점선
-    const thin = [], strong = [], outer = [], sealedLine = [];
+    const thin = [], strong = [], outer = [], sealedLine = [], sealedThin = [];
     for (const c of this.tiles) {
       if (c.kind === 'river' || !visible(c)) continue;
       for (const [dq, dr] of DIRS) {
@@ -291,7 +297,7 @@ export class MapView {
         if (!n) { outer.push(this.edge(c, dq, dr)); continue; }
         if (n.kind === 'river') continue;
         if (n.id < c.id && visible(n)) continue; // 같은 변을 두 번 그리지 않는다
-        if (c.sealed && n.sealed) { if (c.home !== n.home) sealedLine.push(this.edge(c, dq, dr)); continue; }
+        if (c.sealed && n.sealed) { (c.home !== n.home ? sealedLine : sealedThin).push(this.edge(c, dq, dr)); continue; }
         if (c.sealed !== n.sealed) { strong.push(this.edge(c, dq, dr)); continue; }
         if (n.owner !== c.owner || n.gray !== c.gray) strong.push(this.edge(c, dq, dr)); else thin.push(this.edge(c, dq, dr));
       }
@@ -301,8 +307,10 @@ export class MapView {
       g.beginPath(); for (const [p, q] of list) { g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); }
       g.strokeStyle = col; g.lineWidth = w; g.globalAlpha = a; g.setLineDash(dash || []); g.stroke(); g.globalAlpha = 1; g.setLineDash([]);
     };
+    // 칸(헥스) 결은 처음 배율부터 보이게: 작게 볼 때는 가늘지만 조금 더 진하게
     const zoomed = this.hexW() >= 40;
-    if (zoomed) stroke(thin, this.css('--tile-line'), 1, 0.16);
+    stroke(thin, this.css('--tile-line'), zoomed ? 1 : 0.8, zoomed ? 0.22 : 0.3);
+    stroke(sealedThin, this.css('--sealed-line'), 0.6, 0.35);
     stroke(sealedLine, this.css('--sealed-line'), 1, 0.9, [3, 3]);
     stroke(strong, this.css('--tile-line'), zoomed ? 1.6 : 1.1, 0.75);
     stroke(outer, this.css('--outline'), 1.6, 0.8);
@@ -334,11 +342,11 @@ export class MapView {
     for (const id of st.reinforced) {
       const c = idx.byId.get(id); if (!c) continue;
       const ux = c.x - idx.size * 0.3, uy = c.y + idx.size * 0.25;
-      objs.push({ d: ux + uy, draw: () => { const p = this.project(ux, uy), im = IMG['lantern-ours']; if (im && big) drawImageFoot(g, im, p.x, p.y + 6, 1); } });
+      objs.push({ d: depth(ux, uy), draw: () => { const p = this.project(ux, uy), im = IMG['lantern-ours']; if (im && big) drawImageFoot(g, im, p.x, p.y + 6, 1); } });
     }
     for (const c of this.open) { // 구청: 꺼지지 않는 시작 등불
       if (!c.hall || !visible(c)) continue;
-      objs.push({ d: c.x + c.y, draw: () => { const p = pos.get(c.id); drawSprite(g, 'lantern', p.x, p.y - 4, s >= this.sDefault * 0.6 ? 3 : s >= this.sDefault * 0.25 ? 2 : 1); } });
+      objs.push({ d: depth(c.x, c.y), draw: () => { const p = pos.get(c.id); drawSprite(g, 'lantern', p.x, p.y - 4, s >= this.sDefault * 0.6 ? 3 : s >= this.sDefault * 0.25 ? 2 : 1); } });
     }
     for (const m of marches) {
       const a = idx.byId.get(m.src), b = idx.byId.get(m.dst); if (!a || !b) continue;
@@ -346,7 +354,7 @@ export class MapView {
       const t = marchProgress(m, now), flip = this.project(b.x, b.y).x < this.project(a.x, a.y).x;
       for (let i = 0; i < n; i++) {
         const tt = Math.max(0, t - i * 0.06), x = a.x + (b.x - a.x) * tt, y = a.y + (b.y - a.y) * tt;
-        objs.push({ d: x + y, draw: () => {
+        objs.push({ d: depth(x, y), draw: () => {
           const p = this.project(x, y), bob = (Math.floor(now / 300) + i) % 2, im = IMG[(m.npc ? 'fire-' : 'torch-') + (ours ? 'ours' : 'enemy')]; // 정령은 도깨비불
           if (im && big) drawImageFoot(g, im, p.x + (flip ? 1 : -1) * i * 4, p.y + 4 - bob, 1, flip);
           else drawSprite(g, bob ? 'walkA' : 'walkB', p.x, p.y - 6, 1, ours ? this.css('--ours') : this.css('--enemy'));

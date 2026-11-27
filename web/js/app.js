@@ -139,22 +139,11 @@ function render() {
   $('whoDot').style.background = gg ? 'var(--ours)' : 'var(--muted)';
   $('guName').textContent = gg ? gg.name : '서울';
   const other = side === 'n' ? 's' : 'n';
-  $('guSub').textContent = gg ? `등불 ${counts[gu] || 0}칸 · ${sideShort(side)} 연합 ${sc.side[side].score}점 대 ${sc.side[other].score}점`
+  $('guSub').textContent = gg ? `${sideShort(side)} ${sc.side[side].score} : ${sc.side[other].score} ${sideShort(other)}` // 폰 한 줄에 들어가게 연합 점수만(등불 칸 수는 순위에서)
     : `강북 연합 ${sc.side.n.score}점 · 강남 연합 ${sc.side.s.score}점`;
   $('troopBox').hidden = !gg;
   $('btnJoin').hidden = !!gg;
   $('btnJoin').textContent = S.session ? '구 고르기' : '참여하기';
-  // 아래 줄: 첫 버튼은 고른 칸에 따라 개척/진군
-  const bm = $('btnMarch'), act = primaryAction(S.selected);
-  $('marchLbl').textContent = ph === 'night' ? '밤엔 쉬어요' : ph === 'seal' ? '봉인 중' : act === 'attack' ? '진군' : '개척';
-  bm.classList.toggle('night', ph !== 'day');
-  bm.disabled = !side || ph !== 'day' || act === 'own';
-  $('btnReinforce').disabled = !side || ph === 'seal';
-  if (ph === 'day') {
-    const top = (g.flags || [])[0];
-    $('flagTag').textContent = '깃발 최다';
-    $('flagText').textContent = top ? `${S.idx.byId.get(top[0]).name} 칸 · 깃발 ${top[1]}개` : (side ? '칸을 눌러 깃발을 꽂아 목표를 정해요' : '구청 6곳에서 등불을 켜고 시작해요');
-  } else { $('flagTag').textContent = '증원했다면'; $('flagText').textContent = '화면을 끄는 것도 전략이에요'; }
   $('menuBadge').hidden = !inc.length;
   frontLabel();
   $('btnSound').textContent = S.sound ? '소리 끔' : '소리';
@@ -237,7 +226,8 @@ function tick() {
   $('guide').textContent = ph.phase === 'night' ? `지금 이 칸을 보는 사람 ${S.watchers}명 · 많이 볼수록 어둠이 커져요`
     : ph.phase === 'seal' ? '봉인 — 해가 뜨면 잿빛 칸을 다시 개척할 수 있어요'
     : !side ? '구청 6곳에서 등불을 켜고 어둠을 밝혀 나가요 · 강북 3구 연합 대 강남 3구 연합'
-    : isPC() ? '어둠 칸을 눌러 개척 · 다른 연합 불빛과 만나면 진군 · 우리 칸을 끌어 놓아도 돼요' : '어둠 칸을 눌러 개척 · 다른 연합 불빛과 만나면 진군';
+    : isPC() ? '칸을 눌러 개척·진군·증원 · 우리 칸을 끌어 놓아도 돼요 · 여기를 누르면 개척하기 좋은 칸으로' : '칸을 눌러 개척·진군·증원 · 여기를 누르면 개척하기 좋은 칸으로';
+  $('guide').classList.toggle('tap', !!side && ph.phase === 'day');
   $('guide').hidden = !!S.sheet && !isPC();
   $('btnFront').hidden = !!S.sheet && !isPC();
 }
@@ -254,7 +244,7 @@ function openSheet(title, body, live) {
 // 폰: 시트가 가린 만큼 지도를 위로 올리고, 고른 칸을 크게 보여 준다
 function fitToSheet() {
   const mobile = !isPC() && S.sheet;
-  S.map.setInset(mobile ? $('sheet').offsetHeight - document.querySelector('.bottom').offsetHeight : 0);
+  S.map.setInset(mobile ? $('sheet').offsetHeight : 0);
   if (mobile && S.selected) S.map.focus(S.selected); else S.map.clamp();
 }
 function closeSheet() {
@@ -456,24 +446,6 @@ function autoSettleTarget() {
   return best?.id ?? null;
 }
 
-// 아래 버튼: 고른 칸이 맞으면 바로, 아니면 알맞은 칸을 찾는다
-$('btnMarch').addEventListener('click', () => {
-  const side = mySide(); if (!side || phase() !== 'day') return;
-  const act = primaryAction(S.selected);
-  if (S.selected && act === 'attack') return openMarch(S.selected);
-  if (S.selected && canSettle(S.idx, S.selected, side)) return openSettle(S.selected);
-  const t = autoSettleTarget();
-  if (t) { S.map.focus(t); return openSettle(t); }
-  toast('개척할 칸을 지도에서 눌러 주세요.');
-});
-$('btnReinforce').addEventListener('click', () => {
-  const side = mySide(); if (!side) return;
-  if (S.selected && canReinforce(S.idx, S.selected, side)) return openReinforce(S.selected);
-  const inc = incoming(S.idx, S.game.marches, side)[0];
-  const pick = inc ? inc.dst : (phase() === 'night' ? darkFront(S.idx, side).sort((a, b) => a.defense - b.defense)[0]?.id : null);
-  if (pick) { S.map.focus(pick); return openReinforce(pick); }
-  toast('증원할 우리 연합 칸을 지도에서 눌러 주세요.');
-});
 $('warn').addEventListener('click', e => {
   const id = +$('warn').dataset.tile; if (!id) return;
   S.map.focus(id);
@@ -481,12 +453,17 @@ $('warn').addEventListener('click', e => {
 });
 // 둘러보는 중: 시범 전선 ↔ 서울 전체, 구가 있으면: 우리 전선으로
 function frontLabel() { $('frontLbl').textContent = myGu() ? '우리 전선으로' : S.map.view === 'open' ? '서울 전체' : '시범 전선'; }
+// 안내 칩: 낮에 구가 있으면 눌러서 개척하기 좋은 칸(깃발 최다 → 가장 싼 칸)으로 바로 간다(하단 버튼을 없앤 대신)
+$('guide').addEventListener('click', () => {
+  if (!mySide() || phase() !== 'day') return;
+  const t = autoSettleTarget();
+  if (t) { S.map.focus(t); openSettle(t); } else toast('개척할 칸을 지도에서 눌러 주세요.');
+});
 $('btnFront').addEventListener('click', () => {
   if (!myGu() && S.map.view === 'open') S.map.fitAll(); else if (!myGu()) S.map.fitOpen(); else S.map.home();
   frontLabel();
 });
 $('btnJoin').addEventListener('click', () => showOnboard(S.session ? 'gu' : 'story'));
-$('btnMenu').addEventListener('click', openMenu);
 $('btnMenuPc').addEventListener('click', openMenu);
 $('btnSound').addEventListener('click', () => { S.sound = !S.sound; store.set('sound', S.sound ? '1' : '0'); beep(); render(); });
 $('emblem').addEventListener('click', () => (S.session ? openRanking() : showOnboard('story')));
@@ -743,7 +720,7 @@ async function start() {
   await refresh();
   subscribeRealtime();
   watchNow();
-  if (!S.session) { if (!store.get('seenStory') || new URLSearchParams(location.search).has('join')) showOnboard('story'); }
+  if (!S.session) showOnboard('story'); // 로그인이 안 돼 있으면 어떤 게임인지부터(매번). '먼저 지도 둘러보기'로 닫을 수 있다
   else if (!me()?.active) showOnboard('gu');
   else if (phase() !== 'night' && store.get('report') !== S.game.phase.date) { store.set('report', S.game.phase.date); openReport(true); }
   sb.auth.onAuthStateChange((ev, session) => {
