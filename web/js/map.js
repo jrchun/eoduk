@@ -1,7 +1,8 @@
 // 지도 그리기(Canvas 2D) — 서울 전역 쿼터뷰.
 // 평면 좌표(km, map.json의 x = 동쪽, y = 남쪽)를 북쪽이 위인 익숙한 지도 방향으로 그린다.
 // HD-2D 쿼터뷰: 남쪽에서 북쪽을 비스듬히 내려다본다. X = x·0.85, Y = y·0.46(세로를 눌러 기울임). 한강이 서→동으로 가로로 흐른다.
-// 땅은 두께가 있는 판(바깥·강 쪽 절벽). 산(map.json peaks: 북한산·남산·관악산 등)은 칸이 계단처럼 솟고, 불 켜진 칸은 그 위로 조금 더 솟는다(lift). 화면 위아래 흐림·비네트는 styles.css .tiltshift.
+// 땅은 두께가 있는 판(바깥·강 쪽 절벽), 불 켜진 칸은 살짝 솟는다(lift). 산(map.json peaks: 북한산·남산·관악산 등)은 칸 위에 세운 봉우리:
+// 빛 받는 왼쪽 면·그늘진 오른쪽 면·높은 곳 바위색·능선 어깨로 윤곽을 만든다. 산 칸 바닥은 숲빛으로 물든다. 화면 위아래 흐림·비네트는 styles.css .tiltshift.
 // 보이는 순서(먼저 읽혀야 할 것부터): 서울 모양 → 구(이름) → 점령 상태(색·경계) → 움직임(진군·경고) → 칸 이름(확대했을 때만)
 // 그리는 순서: 바탕 → 칸 색 → 한강(벡터) → 경계선 → 유닛 → 안개 → 경고 테두리·이름·알약
 // 색은 styles.css의 CSS 변수(--t-*, --tile-*, --gu-*, --sealed*, --label-*, --pill-*, --fog*)에서 읽는다.
@@ -20,7 +21,7 @@ const CORNER = [...Array(6)].map((_, i) => { const a = Math.PI / 180 * (60 * i -
 // 이웃 방향(rules.js DIRS 순서) → 그 쪽 변의 꼭짓점 번호
 const SOUTH = [[0, 1], [-1, 1]]; // 화면 아래쪽을 보는 두 변(옆면이 보이는 쪽)
 const EDGE_OF_DIR = { '1,0': [0, 1], '-1,0': [3, 4], '0,1': [1, 2], '0,-1': [4, 5], '1,-1': [5, 0], '-1,1': [2, 3] };
-const VARS = ['--t-hi', '--t-mount', '--t-land', '--t-river', '--t-river-edge', '--t-wave', '--t-park', '--t-ink', '--t-bridge', '--t-bam', '--t-paper',
+const VARS = ['--t-hi', '--t-mount', '--t-mount-lit', '--t-mount-shade', '--t-rock', '--t-rock-shade', '--t-tree', '--t-land', '--t-river', '--t-river-edge', '--t-wave', '--t-park', '--t-ink', '--t-bridge', '--t-bam', '--t-paper',
   '--tile-line', '--tile-a', '--tile-ours', '--tile-dark', '--tile-gray', '--tile-gray-line', '--tile-neutral', '--sealed', '--sealed-line', '--outline',
   '--ours-dark', '--attack', '--erode', '--label-bg', '--label-fg', '--label-muted', '--label-shadow', '--pill-enemy', '--pill-ours', '--pill-fg',
   '--fog', '--fog-a', '--cloud-line', '--cloud-fill', '--eyes', '--glow', '--fg', '--ours', '--enemy'];
@@ -45,6 +46,21 @@ export class MapView {
     const px = [], py = [];
     for (const c of this.tiles) for (const [cx, cy] of CORNER) { const x = c.x + cx * m, y = c.y + cy * m; px.push(fx(x, y)); py.push(fy(x, y)); }
     this.proj = { x0: Math.min(...px), x1: Math.max(...px), y0: Math.min(...py), y1: Math.max(...py) };
+    // 산줄기: 산마다 주봉 하나 + 둘레의 작은 봉우리 몇 개(산 크기에 비례). 봉우리가 겹쳐 하나의 산 덩어리로 보인다
+    this.mounts = [];
+    for (const [pi, pk] of (idx.peaks || []).entries()) {
+      const rnd = k => { const v = Math.sin((pi + 1) * 12.9898 + k * 78.233) * 43758.5453; return v - Math.floor(v); };
+      const n = Math.max(1, Math.min(5, Math.round(pk.r * 2)));
+      const list = [{ x: pk.at[0], y: pk.at[1], h: pk.h, w: pk.r * 0.8, k: 0 }];
+      for (let i = 1; i <= n; i++) {
+        const a = rnd(i) * Math.PI * 2, d = pk.r * (0.35 + rnd(i + 9) * 0.3);
+        list.push({ x: pk.at[0] + Math.cos(a) * d, y: pk.at[1] + Math.sin(a) * d * 0.8, h: pk.h * (0.45 + rnd(i + 20) * 0.3), w: pk.r * (0.45 + rnd(i + 30) * 0.2), k: i });
+      }
+      for (const m of list) { // 지도 위(강·바깥이 아닌 칸)에 선 봉우리만
+        const hx = pixelToHex(m.x, m.y, idx.size), c = idx.byKey.get(key(hx.q, hx.r));
+        if (c && c.kind !== 'river') this.mounts.push({ ...m, id: pi * 10 + m.k, tile: c });
+      }
+    }
     this.river = smooth(idx.river || []);
     this.saet = smooth(idx.saetgang || []); // 여의도 남쪽 샛강
     if (opts.interactive !== false) this.bindInput();
@@ -87,13 +103,13 @@ export class MapView {
   lift(c) {
     if (!c || c.kind === 'river') return 0;
     const own = !c.sealed && c.owner ? Math.max(3, Math.min(12, this.cam.s * 0.08)) : 0;
-    return Math.sqrt((c.elev || 0) * 0.35) * this.cam.s * ELEV + own; // 제곱근: 낮은 남산은 도드라지게, 높은 북한산은 덜 치솟게
+    return own; // 지형은 칸을 올리지 않는다(올리면 블록처럼 보임). 산은 칸 위에 봉우리를 세워 그린다(mountain)
   }
   slab() { return Math.max(3, Math.min(16, this.cam.s * 0.13)); } // 땅 판 두께(px)
   center(c) { const p = this.project(c.x, c.y); p.y -= this.lift(c); return p; }
   // 누른 곳의 칸: 솟은 칸은 화면에서 위로 올라가 있으므로, 솟은 윗면 안에 점이 드는 칸 중 가장 앞(남쪽) 칸
   tileAt(X, Y) {
-    const p = this.unproject(X, Y), s = this.cam.s, reach = (0.6 * s * ELEV + 14) / (s * D) + this.idx.size;
+    const p = this.unproject(X, Y), s = this.cam.s, reach = 14 / (s * D) + this.idx.size;
     let best = null, bd = -1e9;
     for (const c of this.tiles) {
       if (Math.abs(c.x - p.x) > this.idx.size * 1.2 || c.y < p.y - this.idx.size * 1.2 || c.y > p.y + reach) continue;
@@ -206,6 +222,38 @@ export class MapView {
   }
 
   // ---------- 그리기 도우미 ----------
+  // 봉우리 하나(m: 평면 위치 x·y, 높이 h km, 밑변 반폭 w km). 화면 높이 = √(h × 0.35) × cam.s × ELEV(낮은 남산도 보이게)
+  mountain(m, night) {
+    const g = this.g, s = this.cam.s;
+    const rnd = k => { const v = Math.sin(m.id * 12.9898 + k * 78.233) * 43758.5453; return v - Math.floor(v); }; // 봉우리마다 같은 모양
+    const H = Math.sqrt(m.h * 0.35) * s * ELEV, w = m.w * s * A;
+    if (H < 4) return;
+    const o = this.project(m.x, m.y), bx = o.x, by = o.y;
+    const px = bx + (rnd(2) - 0.5) * w * 0.4, top = by - H;                                // 봉우리
+    const L = [bx - w, by], R = [bx + w, by], P = [px, top], F = [px + w * 0.12, by];
+    const sl = [px - (px - L[0]) * 0.55, by - H * (0.38 + rnd(3) * 0.12)];                 // 왼쪽 어깨
+    const sr = [px + (R[0] - px) * 0.5, by - H * (0.42 + rnd(4) * 0.15)];                  // 오른쪽 어깨
+    const hw = w;
+    const poly = (pts, col, a = 1) => { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); g.fillStyle = col; g.globalAlpha = a; g.fill(); g.globalAlpha = 1; };
+    poly([L, sl, P, F], this.css('--t-mount-lit'));                 // 빛 받는 면(왼쪽, 빛은 북서쪽 위)
+    poly([F, P, sr, R], this.css('--t-mount-shade'));               // 그늘 면
+    if (m.h >= 0.3) {                                                // 높은 산은 꼭대기에 바위
+      const k = Math.min(0.55, 0.25 + (m.h - 0.3) * 0.6), cy = top + H * k, at = (a, b) => [a[0] + (b[0] - a[0]) * (cy - a[1]) / (b[1] - a[1]), cy];
+      const l = at(P, sl[1] < cy ? L : sl), r = at(P, sr[1] < cy ? R : sr), mid = [px + w * 0.06, cy + H * 0.04];
+      poly([l, P, mid], this.css('--t-rock'));
+      poly([mid, P, r], this.css('--t-rock-shade'));
+    }
+    // 능선(봉우리에서 내려오는 선)과 윤곽
+    g.beginPath(); g.moveTo(P[0], P[1]); g.lineTo(F[0], F[1]); g.strokeStyle = this.css('--t-ink'); g.globalAlpha = 0.18; g.lineWidth = 1; g.stroke();
+    g.beginPath(); [L, sl, P, sr, R].forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+    g.globalAlpha = night ? 0.5 : 0.45; g.lineWidth = 1.2; g.stroke(); g.globalAlpha = 1;
+    // 산자락 숲(확대했을 때만): 밑변을 따라 작은 나무 점
+    if (hw > 30) {
+      g.fillStyle = this.css('--t-tree');
+      for (let i = 0; i < 5; i++) { const t = (i + 0.5) / 5, x = L[0] + (R[0] - L[0]) * t, y = by - 2 - rnd(10 + i) * H * 0.12; g.beginPath(); g.arc(x, y, Math.max(1.5, hw * 0.05), 0, Math.PI * 2); g.fill(); }
+    }
+  }
+
   hexScreen(c, shrink = 1, up = this.lift(c)) {
     const g = this.g, r = this.idx.size * shrink;
     g.beginPath();
@@ -379,6 +427,11 @@ export class MapView {
       g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); g.setLineDash([]);
     }
     const objs = [], big = s >= this.sDefault * 0.55;
+    // 산 봉우리(깊이 순으로 유닛·등불과 섞어 그린다)
+    for (const m of this.mounts) {
+      if (!visible(m.tile)) continue;
+      objs.push({ d: depth(m.x, m.y) - 0.01, draw: () => this.mountain(m, night) });
+    }
     for (const id of st.reinforced) {
       const c = idx.byId.get(id); if (!c) continue;
       const ux = c.x - idx.size * 0.3, uy = c.y + idx.size * 0.25;
