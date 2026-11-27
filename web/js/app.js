@@ -141,7 +141,7 @@ function render() {
     $('flagText').textContent = top ? `${S.idx.byId.get(top[0]).name} 칸 · 깃발 ${top[1]}개` : (gu ? '칸을 눌러 깃발을 꽂아 목표를 정해요' : '아직 깃발이 없어요');
   } else { $('flagTag').textContent = '증원했다면'; $('flagText').textContent = '화면을 끄는 것도 전략이에요'; }
   $('menuBadge').hidden = !inc.length;
-  $('btnFront').textContent = gu ? '우리 전선으로' : '전체 지도';
+  frontLabel();
   $('btnSound').textContent = S.sound ? '소리 끔' : '소리';
   $('btnSound').setAttribute('aria-label', S.sound ? '소리 끄기' : '소리 켜기');
   renderPanel(inc, ranked);
@@ -408,7 +408,12 @@ $('warn').addEventListener('click', e => {
   S.map.focus(id);
   if (e.target.closest('#warnBtn')) openReinforce(id); else openTile(id);
 });
-$('btnFront').addEventListener('click', () => S.map.home());
+// 둘러보는 중: 시범 전선 ↔ 서울 전체, 구가 있으면: 우리 전선으로
+function frontLabel() { $('btnFront').textContent = myGu() ? '우리 전선으로' : S.map.view === 'open' ? '서울 전체' : '시범 전선'; }
+$('btnFront').addEventListener('click', () => {
+  if (!myGu() && S.map.view === 'open') S.map.fitAll(); else if (!myGu()) S.map.fitOpen(); else S.map.home();
+  frontLabel();
+});
 $('btnJoin').addEventListener('click', () => showOnboard(S.session ? 'gu' : 'story'));
 $('btnMenu').addEventListener('click', openMenu);
 $('btnMenuPc').addEventListener('click', openMenu);
