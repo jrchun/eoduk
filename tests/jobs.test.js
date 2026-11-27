@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/worker.js';
-import { daily, runScheduled, supabaseKeepalive } from '../src/jobs.js';
+import { daily, runScheduled, supabaseKeepalive, supabaseTick } from '../src/jobs.js';
 
 function fakeDB(count = 3) {
   const log = [];
@@ -35,8 +35,17 @@ test('Supabase 잠들기 방지: 공개 키로 keepalive를 부르고, 실패하
 test('runScheduled: 모드에 맞는 작업만 한다', async () => {
   assert.equal(await runScheduled({ DB: fakeDB(0) }), '사용 기록 0건');
   assert.equal(await runScheduled({}), '할 일 없음');
-  const fetchFn = async () => new Response('null', { status: 200 });
-  assert.equal(await runScheduled({ SUPABASE_URL: 'https://a.supabase.co', SUPABASE_KEY: 'k' }, fetchFn), 'Supabase 응답 200');
+  const fetchFn = async () => new Response('{"tick_date":"2026-11-27","tick_done":3}', { status: 200 });
+  assert.equal(await runScheduled({ SUPABASE_URL: 'https://a.supabase.co', SUPABASE_KEY: 'k' }, fetchFn), '게임 시간 2026-11-27 침식 3/8');
+});
+
+test('Supabase tick: 공개 키로 rpc/tick을 부르고, 실패하면 오류', async () => {
+  const calls = [];
+  const env = { SUPABASE_URL: 'https://abc.supabase.co/', SUPABASE_KEY: 'sb_publishable_x' };
+  const ok = async (url, init) => { calls.push([url, init.method, init.headers.apikey]); return new Response('{"tick_date":"2026-11-27","tick_done":0}'); };
+  assert.equal(await supabaseTick(env, ok), '게임 시간 2026-11-27 침식 0/8');
+  assert.deepEqual(calls[0], ['https://abc.supabase.co/rest/v1/rpc/tick', 'POST', 'sb_publishable_x']);
+  await assert.rejects(supabaseTick(env, async () => new Response('', { status: 500 })), /HTTP 500/);
 });
 
 test('worker.scheduled가 작업을 waitUntil로 넘긴다', async () => {

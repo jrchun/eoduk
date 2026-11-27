@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "name": "내 앱",
-  "summary": "한 줄 설명",
+  "name": "어둑시니",
+  "summary": "해가 지면 어둠에 먹히는 도시, 동네끼리 등불을 지키는 땅따먹기",
   "category": "기타",
   "status": "개발중",
   "public": true,
-  "mode": "d1",
-  "repo": "",
-  "createdAt": "",
+  "mode": "supabase",
+  "repo": "jrchun/eoduk",
+  "createdAt": "2026-11-27",
   "updatedAt": ""
 }

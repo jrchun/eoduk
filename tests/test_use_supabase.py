@@ -26,7 +26,7 @@ class UseSupabaseTests(unittest.TestCase):
         self.assertNotIn("d1_databases", toml)
         self.assertIn(f'SUPABASE_URL = "{url}"', toml)
         self.assertIn(f'SUPABASE_KEY = "{key}"', toml)
-        self.assertIn('crons = ["30 22 * * *"]', toml)  # 잠들기 방지 예약 작업은 남는다
+        self.assertIn('crons = [', toml)  # 예약 작업(어둑시니는 10분마다 tick)은 남는다
         # 두 번 실행해도 [vars]가 한 번만 들어간다
         import subprocess, sys
         subprocess.run([sys.executable, "scripts/use_supabase.py", "--url", url, "--key", key], cwd=dst, check=True, capture_output=True)

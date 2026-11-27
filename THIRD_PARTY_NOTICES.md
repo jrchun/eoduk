@@ -2,6 +2,13 @@
 
 이 저장소에는 아래 외부 코드가 그대로 들어 있습니다. 각 라이선스에 따라 출처와 라이선스 전문을 적습니다.
 
+## 서울 행정구역 경계 (지도 데이터)
+
+- 파일: `data/geo/gu.json`(구 경계), `data/geo/dong.json`(동 경계). 시범 전선 6개 구만 남겼다. 이것으로 만든 헥스 지도가 `web/data/map.json`·`supabase/seed.sql`
+- 원자료: 통계청(KOSTAT) 센서스용 행정구역경계, 2013
+- 받은 곳: https://github.com/southkorea/seoul-maps (`kostat/2013/json/seoul_municipalities_geo_simple.json`, `seoul_submunicipalities_geo_simple.json`). 저장소에 별도 라이선스 표기는 없다
+- 일출·일몰 계산식은 suncalc(BSD-2, Vladimir Agafonkin)와 같은 천문 식을 직접 옮겨 썼다(코드를 복사하지 않음)
+
 ## @supabase/supabase-js 2.119.0
 
 - 파일: `examples/supabase/web/vendor-supabase.js` (Supabase 모드로 바꾸면 `web/vendor-supabase.js`로 복사됨)

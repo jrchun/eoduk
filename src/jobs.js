@@ -22,9 +22,22 @@ export async function supabaseKeepalive(env, fetchFn = fetch) {
   return 'Supabase 응답 ' + r.status;
 }
 
+// 어둑시니: 10분마다 게임 시간을 앞으로 돌린다(밤 침식 틱, 자정 기록, 일요일 시즌 정산).
+// DB 함수 tick()은 시간이 된 일만 하므로 여러 번 불러도 안전하다. 요청이 오가니 잠들기 방지도 겸한다.
+export async function supabaseTick(env, fetchFn = fetch) {
+  const r = await fetchFn(env.SUPABASE_URL.replace(/\/+$/, '') + '/rest/v1/rpc/tick', {
+    method: 'POST',
+    headers: { apikey: env.SUPABASE_KEY, 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  if (!r.ok) throw new Error('게임 시간 진행(tick) 실패: HTTP ' + r.status);
+  const j = await r.json().catch(() => null);
+  return j ? `게임 시간 ${j.tick_date} 침식 ${j.tick_done}/8` : 'tick 응답 ' + r.status;
+}
+
 export async function runScheduled(env, fetchFn = fetch) {
   const done = [];
   if (env.DB) done.push(await daily(env));
-  if (env.SUPABASE_URL && env.SUPABASE_KEY) done.push(await supabaseKeepalive(env, fetchFn));
+  if (env.SUPABASE_URL && env.SUPABASE_KEY) done.push(await supabaseTick(env, fetchFn));
   return done.join(', ') || '할 일 없음';
 }
