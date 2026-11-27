@@ -709,7 +709,7 @@ async function start() {
   for (const c of S.idx.byId.values()) if (c.hall) { c.owner = c.hall; c.defense = BAL.hallStart; }
   S.sunbar = mountSunbar($('sunbar'));
   S.map = new MapView($('map'), S.idx, {
-    onTap: id => (id ? openTile(id) : S.sheet && closeSheet()),
+    onTap: id => (S.sheet ? closeSheet() : id ? openTile(id) : null), // 칸이 열려 있으면 어디를 눌러도 먼저 선택 취소
     onDragMarch: (src, dst) => (canSettle(S.idx, dst, mySide()) ? openSettle(dst) : openMarch(dst, src)),
   });
   document.documentElement.dataset.theme = phaseAt(Date.now()).phase === 'day' ? 'day' : 'night';
