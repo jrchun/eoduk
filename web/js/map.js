@@ -84,11 +84,20 @@ export class MapView {
   }
 
   overview() { return !this.state.myGu; }
-  // 전체 보기: 투영된 지도 범위의 정가운데를 화면 가운데에
-  fitAll() {
-    const P = this.proj, a = (P.x0 + P.x1) / 2 / KX, b = (P.y0 + P.y1) / 2 / KY;
-    this.cam.x = (a + b) / 2; this.cam.y = (b - a) / 2; this.cam.s = this.sFit;
+  // 칸 묶음의 투영 범위 정가운데를 화면 가운데에, 화면을 채우는 배율로
+  fitTiles(list) {
+    const m = this.idx.size, px = [], py = [];
+    for (const c of list) for (const [cx, cy] of CORNER) { const x = c.x + cx * m, y = c.y + cy * m; px.push(KX * (x - y)); py.push(KY * (x + y)); }
+    const x0 = Math.min(...px), x1 = Math.max(...px), y0 = Math.min(...py), y1 = Math.max(...py);
+    const a = (x0 + x1) / 2 / KX, b = (y0 + y1) / 2 / KY;
+    this.cam.x = (a + b) / 2; this.cam.y = (b - a) / 2;
+    this.cam.s = Math.min((this.w - 24) / (x1 - x0), (this.hgt - this.inset - 56) / (y1 - y0));
+    this.clamp();
   }
+  // 서울 전체 보기
+  fitAll() { this.fitTiles(this.tiles); this.cam.s = this.sFit; this.view = 'all'; }
+  // 시범 전선(열린 구) 보기
+  fitOpen() { this.fitTiles(this.open.filter(c => c.kind !== 'river')); this.view = 'open'; }
   focusTiles() {
     const gu = this.state.myGu;
     const mine = gu ? this.tiles.filter(c => c.owner === gu) : [];
@@ -98,7 +107,7 @@ export class MapView {
   // 둘러보는 중: 서울 전체 / 우리 구가 있으면: 우리 전선을 크게
   home() {
     this.homed = this.state.myGu || 'browse';
-    if (this.overview()) { this.fitAll(); return; }
+    if (this.overview()) { this.fitOpen(); return; } // 처음엔 시범 6개 구가 화면을 채우게
     const ts = this.focusTiles();
     const front = ts.filter(c => c.adj.some(n => { const o = this.idx.byId.get(n); return o.kind !== 'river' && !o.sealed && o.owner !== c.owner; }));
     const pick = front.length ? front : ts;
@@ -117,7 +126,7 @@ export class MapView {
     this.clamp();
   }
   setInset(px) { this.inset = Math.max(0, Math.min(this.hgt * 0.8, px || 0)); }
-  setZoom(s) { this.cam.s = Math.min(this.sDefault * 1.8, Math.max(this.sFit, s)); this.clamp(); }
+  setZoom(s) { this.cam.s = Math.min(this.sDefault * 1.8, Math.max(this.sFit, s)); this.view = null; this.clamp(); }
   zoomBy(f) { this.setZoom(this.cam.s * f); }
   clamp() {
     const P = this.plane;
