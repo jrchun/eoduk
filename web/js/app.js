@@ -6,6 +6,7 @@ import { indexMap, applyTiles, canAttack, bestSource, marchPreview, incoming, ow
 import { MapView } from './map.js';
 import { drawStory, drawShareCard } from './story.js';
 import { loadImages } from './sprites.js';
+import { nicknameCandidates, MAX_NICK } from './names.js';
 import { CHAT } from './links.js';
 
 const $ = id => document.getElementById(id);
@@ -509,47 +510,58 @@ function showOnboard(step, i = 0) {
   const close = h('button', { class: 'linkbtn', type: 'button', onclick: hideOnboard }, '먼저 지도 둘러보기');
   if (step === 'story') {
     const cv = h('canvas', { width: 320, height: 180, 'aria-hidden': 'true' });
-    card.replaceChildren(steps(i), cv, h('h1', {}, STORY[i][0]), h('p', {}, STORY[i][1]),
-      h('button', { class: 'btn primary', type: 'button', onclick: () => (i < 2 ? showOnboard('story', i + 1) : showOnboard('gu')) }, i < 2 ? '다음' : '우리 구 고르기'),
-      h('div', { class: 'row', style: 'justify-content:space-between' }, close,
-        h('button', { class: 'linkbtn', type: 'button', onclick: () => showOnboard('login') }, '이미 등불지기예요')));
+    card.replaceChildren(steps(i), cv, h('h1', { class: 'ob-title' }, STORY[i][0]), h('p', {}, STORY[i][1]),
+      h('div', { class: 'ob-foot' },
+        h('button', { class: 'btn primary', type: 'button', onclick: () => (i < 2 ? showOnboard('story', i + 1) : showOnboard('gu')) }, i < 2 ? '다음' : '우리 구 고르기'),
+        h('div', { class: 'row', style: 'justify-content:space-between' }, close,
+          h('button', { class: 'linkbtn', type: 'button', onclick: () => showOnboard('login') }, '이미 등불지기예요'))));
     drawStory(cv, i);
     return;
   }
   if (step === 'gu') {
+    // 스크롤 없이 한 화면: 왼쪽 한강 북쪽 3개, 오른쪽 남쪽 3개. 고르면 아래 상자에 자세히, 정하기 버튼은 늘 아래에 붙어 있다.
     const counts = Object.fromEntries((S.game?.gus || []).map(g => [g.id, g]));
-    const list = h('div', { class: 'gulist' });
-    for (const side of ['n', 's']) {
-      list.append(h('p', { class: 'side' }, side === 'n' ? '한강 북쪽' : '한강 남쪽'));
-      for (const g of S.idx.gu.values()) {
-        if (g.side !== side) continue;
-        const t = TYPES[g.type];
-        list.append(h('button', { class: 'gucard', type: 'button', 'aria-pressed': String(pickedGu === g.id), onclick: () => { pickedGu = g.id; showOnboard('gu'); } },
+    const detail = h('div', { class: 'gudetail', 'aria-live': 'polite' });
+    const go = h('button', { class: 'btn primary', type: 'button', onclick: () => (S.session ? showOnboard('nick') : showOnboard('signup')) });
+    const cells = [];
+    const update = () => {
+      for (const c of cells) c.setAttribute('aria-pressed', String(c.dataset.gu === pickedGu));
+      go.disabled = !pickedGu;
+      go.textContent = pickedGu ? `${josa(guOf(pickedGu).name, '으로', '로')} 정하기` : '구를 골라 주세요';
+      if (!pickedGu) { detail.replaceChildren(h('p', { class: 'hint' }, '구를 누르면 강점과 약점이 여기 나온다. 사람이 적은 구는 병력 생산이 늘어난다.')); return; }
+      const g = guOf(pickedGu), t = TYPES[g.type];
+      detail.replaceChildren(
+        h('b', {}, `${g.name} · ${t.name} · ${g.symbol}`),
+        h('span', { class: 'good' }, '+ ' + t.good), h('span', { class: 'bad' }, '- ' + t.bad));
+    };
+    const col = side => h('div', { class: 'gucol' }, h('p', { class: 'side' }, side === 'n' ? '한강 북쪽' : '한강 남쪽'),
+      [...S.idx.gu.values()].filter(g => g.side === side).map(g => {
+        const c = h('button', { class: 'gucell', type: 'button', 'data-gu': g.id, onclick: () => { pickedGu = g.id; update(); } },
           h('b', {}, h('span', { class: 'dot', style: `background:var(--gu-${g.id})` }), g.name),
-          h('span', {}, `${t.name} · ${g.symbol}`),
-          h('span', { class: 'good' }, t.good), h('span', { class: 'bad' }, t.bad),
-          h('span', { class: 'hint' }, `등불지기 ${counts[g.id]?.players ?? 0}명 · 등불 ${counts[g.id]?.tiles ?? '-'}칸`)));
-      }
-    }
-    card.replaceChildren(steps(3), h('h1', {}, '어느 구의 등불을 지킬까'),
-      h('p', { class: 'hint' }, '시범 전선: 한강을 사이에 둔 6개 구. 시즌(한 주) 동안은 바꿀 수 없다. 사람이 적은 구는 병력 생산이 늘어난다.'),
-      list,
-      h('button', { class: 'btn primary', type: 'button', disabled: !pickedGu, onclick: () => (S.session ? showOnboard('nick') : showOnboard('signup')) }, pickedGu ? `${guOf(pickedGu).name}로 정하기` : '구를 골라 주세요'),
-      close);
+          h('small', {}, `${TYPES[g.type].name} · ${counts[g.id]?.players ?? 0}명`));
+        cells.push(c); return c;
+      }));
+    card.replaceChildren(steps(3), h('h1', { class: 'ob-title' }, '어느 구의 등불을 지킬까'),
+      h('p', { class: 'hint' }, '시즌(한 주) 동안은 바꿀 수 없다.'),
+      h('div', { class: 'gugrid' }, col('n'), col('s')), detail,
+      h('div', { class: 'ob-foot' }, go, close));
+    update();
     return;
   }
   if (step === 'signup' || step === 'login' || step === 'nick') {
     const signup = step === 'signup', nickOnly = step === 'nick';
     const msg = h('p', { class: 'hint', role: 'status' });
     const f = h('form', { class: 'sheet-body' },
-      (signup || nickOnly) ? h('div', { class: 'field' }, h('label', { for: 'obNick' }, '닉네임 (1~12자, 순위에 보임)'), h('input', { id: 'obNick', type: 'text', maxlength: 12, required: true, value: me()?.nickname || '' })) : null,
+      (signup || nickOnly) ? h('div', { class: 'field' }, h('label', { for: 'obNick' }, '닉네임 (1~12자, 순위에 보임. 고쳐도 된다)'),
+        h('div', { class: 'nickrow' }, h('input', { id: 'obNick', type: 'text', maxlength: MAX_NICK, required: true, value: me()?.nickname || '', autocomplete: 'off' }),
+          h('button', { class: 'btn small', type: 'button', onclick: () => fillNickname(true) }, '다른 추천'))) : null,
       nickOnly ? null : h('div', { class: 'field' }, h('label', { for: 'obEmail' }, '이메일'), h('input', { id: 'obEmail', type: 'email', autocomplete: 'email', required: true })),
       nickOnly ? null : h('div', { class: 'field' }, h('label', { for: 'obPw' }, '비밀번호 (6자 이상)'), h('input', { id: 'obPw', type: 'password', minlength: 6, autocomplete: signup ? 'new-password' : 'current-password', required: true })),
       h('button', { class: 'btn primary', type: 'submit' }, signup ? '등불지기 등록' : nickOnly ? '시작하기' : '로그인'), msg);
     f.addEventListener('submit', async e => {
       e.preventDefault(); msg.textContent = '처리 중…';
       try {
-        if (!nickOnly) {
+        if (!nickOnly && !(signup && S.session)) { // 가입은 됐는데 닉네임이 겹쳐 다시 누른 경우는 건너뛴다
           const email = $('obEmail').value.trim(), password = $('obPw').value;
           const { data, error } = signup ? await sb.auth.signUp({ email, password }) : await sb.auth.signInWithPassword({ email, password });
           if (error) throw new Error(friendly(error));
@@ -571,6 +583,7 @@ function showOnboard(step, i = 0) {
       h('div', { class: 'row', style: 'justify-content:space-between' },
         h('button', { class: 'linkbtn', type: 'button', onclick: () => showOnboard('gu') }, '구 다시 고르기'),
         nickOnly ? null : h('button', { class: 'linkbtn', type: 'button', onclick: () => showOnboard(signup ? 'login' : 'signup') }, signup ? '이미 있어요, 로그인' : '처음이에요, 등록')));
+    if ((signup || nickOnly) && !me()?.nickname) fillNickname(false);
     return;
   }
   if (step === 'home') {
@@ -581,6 +594,14 @@ function showOnboard(step, i = 0) {
       h('p', { class: 'hint' }, '30초면 충분하다. 점심, 퇴근 전 일몰 러시, 자기 전 증원.'),
       h('button', { class: 'btn primary', type: 'button', onclick: hideOnboard }, '지도로'));
   }
+}
+// 추천 닉네임: 후보 여러 개 중 아무도 안 쓰는 첫 번째를 칸에 넣는다(연결이 안 되면 그냥 첫 후보)
+async function fillNickname(again) {
+  const input = $('obNick'); if (!input) return;
+  const cands = nicknameCandidates(10).filter(n => !again || n !== input.value);
+  let pick = cands[0];
+  try { const free = await rpc('nicknames_free', { names: cands }); if (free?.length) pick = free[0]; } catch { /* 첫 후보로 */ }
+  if ($('obNick') === input) { input.value = pick; if (again) input.focus(); }
 }
 function hideOnboard() { $('onboard').hidden = true; store.set('seenStory', '1'); }
 
