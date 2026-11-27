@@ -30,6 +30,12 @@ const RIVER = [[126.872, 37.574], [126.884, 37.565], [126.894, 37.556], [126.903
   [126.938, 37.534], [126.947, 37.527], [126.955, 37.519], [126.966, 37.513], [126.980, 37.508], [126.996, 37.512],
   [127.007, 37.520], [127.016, 37.529]];
 const BRIDGES = [['양화대교', [126.903, 37.544]], ['마포대교', [126.936, 37.535]], ['한강대교', [126.959, 37.516]], ['동작대교', [126.981, 37.508]]];
+// 쿼터뷰 랜드마크 그림(web/assets/landmarks/landmark-<key>.png). 실제 위치에 세운다.
+const SPRITES = [
+  ['assembly', [126.9140, 37.5318]], ['parc1', [126.9271, 37.5276]], ['thehyundai', [126.9283, 37.5259]],
+  ['ifc', [126.9256, 37.5254]], ['63building', [126.9403, 37.5198]],
+];
+const BAMSEOM = [126.9275, 37.5395];
 // 랜드마크 칸(가장 가까운 칸 하나에 이름을 준다)
 const LANDMARKS = [
   ['국회의사당', [126.914, 37.532]], ['더현대·파크원', [126.928, 37.526]], ['63빌딩', [126.940, 37.519]],
@@ -102,9 +108,17 @@ export function buildMap() {
   for (const c of list) {
     const ns = neighbors(c.q, c.r).map(([q, r]) => idOf.get(key(q, r))).filter(Boolean);
     c.edge = ns.length < 6; // 지도 가장자리(어둠이 들어오는 곳)
+    if (c.dong === '여의동') c.island = true; // 여의도(섬 땅 색)
     delete c.dong;
   }
-  return { size: SIZE, list, river: riverKm.map(([x, y]) => [+x.toFixed(3), +y.toFixed(3)]) };
+  const km = ll => toKm(ll).map(v => +v.toFixed(3));
+  const tileAt = ll => { const [x, y] = toKm(ll); let best = null, bd = 1e9; for (const c of list) { const d = Math.hypot(c.x - x, c.y - y); if (d < bd) { bd = d; best = c; } } return best.id; };
+  return {
+    size: SIZE, list, river: riverKm.map(([x, y]) => [+x.toFixed(3), +y.toFixed(3)]),
+    bridges: BRIDGES.map(([name, ll]) => ({ name, at: km(ll) })),
+    sprites: SPRITES.map(([key, ll]) => ({ key, at: km(ll), tile: tileAt(ll) })),
+    bamseom: km(BAMSEOM),
+  };
 }
 
 function sqlStr(s) { return s == null ? 'null' : `'${String(s).replace(/'/g, "''")}'`; }
@@ -113,7 +127,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const m = buildMap();
   const gus = Object.entries(GU).map(([full, g]) => ({ ...g, name: full }));
   mkdirSync(ROOT + 'web/data', { recursive: true });
-  writeFileSync(ROOT + 'web/data/map.json', JSON.stringify({ size: m.size, river: m.river, gu: gus, tiles: m.list }) + '\n');
+  writeFileSync(ROOT + 'web/data/map.json', JSON.stringify({ size: m.size, river: m.river, bridges: m.bridges, sprites: m.sprites, bamseom: m.bamseom, gu: gus, tiles: m.list }) + '\n');
   const rows = m.list.map(c => `(${c.id},${c.q},${c.r},${sqlStr(c.kind)},${sqlStr(c.gu)},${sqlStr(c.name)},${c.edge},${!!c.landmark})`);
   const guRows = gus.map(g => `(${sqlStr(g.id)},${sqlStr(g.name)},${sqlStr(g.short)},${sqlStr(g.type)},${sqlStr(g.side)})`);
   writeFileSync(ROOT + 'supabase/seed.sql', `-- scripts/build_map.mjs가 만든 파일(손으로 고치지 않는다). 칸 ${m.list.length}개.

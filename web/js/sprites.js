@@ -110,3 +110,30 @@ export function drawSprite(g, name, cx, cy, scale, team) {
   g.imageSmoothingEnabled = false;
   g.drawImage(c, Math.round(cx - w / 2), Math.round(cy - h / 2), w, h);
 }
+
+// ---------- PNG 스프라이트(유닛 48×64, 랜드마크 쿼터뷰 도트) ----------
+// 실패하면 null로 남고, 그리는 쪽이 위의 글자 격자 도트로 대신한다.
+export const IMG = {};
+const PNGS = {
+  'torch-ours': 'assets/units/torchbearer-ours-48x64.png', 'torch-enemy': 'assets/units/torchbearer-enemy-48x64.png',
+  'lantern-ours': 'assets/units/lanternkeeper-ours-48x64.png', 'lantern-enemy': 'assets/units/lanternkeeper-enemy-48x64.png',
+  'fire-ours': 'assets/units/dokkaebifire-ours-48x64.png', 'fire-enemy': 'assets/units/dokkaebifire-enemy-48x64.png',
+  '63building': 'assets/landmarks/landmark-63building.png', parc1: 'assets/landmarks/landmark-parc1.png',
+  thehyundai: 'assets/landmarks/landmark-thehyundai.png', ifc: 'assets/landmarks/landmark-ifc.png',
+  assembly: 'assets/landmarks/landmark-assembly.png',
+};
+export function loadImages() {
+  return Promise.all(Object.entries(PNGS).map(([k, src]) => new Promise(res => {
+    const im = new Image();
+    im.onload = () => { IMG[k] = im; res(); };
+    im.onerror = () => { IMG[k] = null; res(); };
+    im.src = src;
+  })));
+}
+// 발밑 가운데(cx, footY)에 맞춰 정수 배율로 그린다. flip이면 좌우 반전.
+export function drawImageFoot(g, im, cx, footY, scale, flip = false) {
+  const w = im.width * scale, h = im.height * scale;
+  g.imageSmoothingEnabled = false;
+  if (flip) { g.save(); g.translate(Math.round(cx), 0); g.scale(-1, 1); g.drawImage(im, Math.round(-w / 2), Math.round(footY - h), w, h); g.restore(); }
+  else g.drawImage(im, Math.round(cx - w / 2), Math.round(footY - h), w, h);
+}

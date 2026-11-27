@@ -7,7 +7,7 @@ export function indexMap(map) {
   for (const g of map.gu) gu.set(g.id, g);
   for (const t of map.tiles) { const c = { ...t, owner: null, defense: 0, gray: false }; byId.set(t.id, c); byKey.set(key(t.q, t.r), c); }
   for (const c of byId.values()) c.adj = neighbors(c.q, c.r).map(([q, r]) => byKey.get(key(q, r))?.id).filter(Boolean);
-  return { byId, byKey, gu, size: map.size, river: map.river };
+  return { byId, byKey, gu, size: map.size, river: map.river, bridges: map.bridges || [], sprites: map.sprites || [], bamseom: map.bamseom || null };
 }
 export function applyTiles(idx, rows) {
   for (const [id, owner, defense, gray] of rows || []) {
