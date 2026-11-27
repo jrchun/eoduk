@@ -3,7 +3,7 @@
    색은 아래 변수만 쓴다. 지도(canvas)도 --map-*, --gu-*, --ours, --enemy를 읽는다. */
 /* 어둑시니 v2 토큰(작업지시서 6-1). 각진 상자 + 2px 먹선 + 각진 그림자. 모서리는 둥글리지 않는다.
    테마는 게임 시간이 정한다(낮 data-theme="day", 일몰~일출 "night"). 지도 색(--t-*, --tile-*, --gu-*, --label-*, --fog*)도 여기. */
-:root, :root[data-theme="day"]{
+:root, [data-theme="day"]{
   --bg:#f3ead6; --surface:#fbf5e8; --sunk:#ece2cc; --line:#2b2420; --fg:#2b2420; --muted:#6a5a4a;
   --accent:#a87c2e; --ours:#d9a441; --ours-dark:#a87c2e; --on-ours:#2b2420; --enemy:#b5523b; --danger:#b5523b; --on-danger:#ffffff;
   --timer:#8c3e2c; --night-accent:#6a4a9a; --eyes:#4fe3c1; --ok:#4e7a4e; --bad:#a8432f;
@@ -23,7 +23,7 @@
   --pixel:"DotGothic16", ui-monospace, monospace;
   color-scheme:light;
 }
-:root[data-theme="night"]{
+[data-theme="night"]{
   --bg:#0f0c14; --surface:#1a1420; --sunk:#120e18; --line:#8c7a5a; --fg:#e9dfc8; --muted:#a99c86;
   --accent:#ffb547; --ours:#ffb547; --ours-dark:#a87c2e; --on-ours:#1a1206; --enemy:#d0664c; --danger:#c23a32; --on-danger:#ffffff;
   --timer:#4fe3c1; --ok:#79b07a; --bad:#e0745a;

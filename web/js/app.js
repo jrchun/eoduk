@@ -4,7 +4,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { TYPES, BAL, fmtLeft, fmtClock, attackPower, defensePower, phaseAt } from './rules.js';
 import { indexMap, applyTiles, canAttack, bestSource, marchPreview, incoming, ownNeighborCount, troopsLocal, rankGus, countTiles, reportLine, shareText, josa, darkFront } from './view.js';
 import { MapView } from './map.js';
-import { drawStory, drawShareCard } from './story.js';
+import { startScene, drawShareCard } from './story.js';
 import { loadImages } from './sprites.js';
 import { nicknameCandidates, MAX_NICK } from './names.js';
 import { CHAT } from './links.js';
@@ -137,6 +137,7 @@ function render() {
     $('flagText').textContent = top ? `${S.idx.byId.get(top[0]).name} 칸 · 깃발 ${top[1]}개` : (gu ? '칸을 눌러 깃발을 꽂아 목표를 정해요' : '아직 깃발이 없어요');
   } else { $('flagTag').textContent = '증원했다면'; $('flagText').textContent = '화면을 끄는 것도 전략이에요'; }
   $('menuBadge').hidden = !inc.length;
+  $('btnFront').textContent = gu ? '우리 전선으로' : '전체 지도';
   $('btnSound').textContent = S.sound ? '소리 끔' : '소리';
   $('btnSound').setAttribute('aria-label', S.sound ? '소리 끄기' : '소리 켜기');
   renderPanel(inc, ranked);
@@ -219,6 +220,7 @@ function tick() {
   warn.hidden = !target || (!!S.sheet && !isPC());
   $('guide').textContent = ph.phase === 'night' ? `지금 이 칸을 보는 사람 ${S.watchers}명 · 많이 볼수록 어둠이 커져요`
     : ph.phase === 'seal' ? '봉인 — 해가 뜨면 잿빛 칸 쟁탈이 시작돼요'
+    : !gu ? '시범 전선 6개 구가 맞붙어요 · 구를 고르면 우리 전선이 크게 보여요'
     : isPC() ? '우리 칸을 끌어서 적 칸에 놓으면 진군 · 칸에 깃발을 꽂아 목표 표시' : '안개 너머는 정찰 전까지 보이지 않아요';
   $('guide').hidden = !!S.sheet && !isPC();
   $('btnFront').hidden = !!S.sheet && !isPC();
@@ -515,7 +517,7 @@ function showOnboard(step, i = 0) {
         h('button', { class: 'btn primary', type: 'button', onclick: () => (i < 2 ? showOnboard('story', i + 1) : showOnboard('gu')) }, i < 2 ? '다음' : '우리 구 고르기'),
         h('div', { class: 'row', style: 'justify-content:space-between' }, close,
           h('button', { class: 'linkbtn', type: 'button', onclick: () => showOnboard('login') }, '이미 등불지기예요'))));
-    drawStory(cv, i);
+    startScene(cv, i, S.mapData, S.game?.tiles);
     return;
   }
   if (step === 'gu') {
@@ -612,6 +614,7 @@ setInterval(() => { if (S.game) { tick(); document.querySelectorAll('[data-arriv
 
 async function start() {
   const [map] = await Promise.all([(await fetch('data/map.json')).json(), loadImages()]);
+  S.mapData = map;
   S.idx = indexMap(map);
   // 시작 전 지도: 칸 중심이 속한 구가 주인
   for (const c of S.idx.byId.values()) if (c.kind === 'land') { c.owner = c.gu; c.defense = BAL.tileStart; }
