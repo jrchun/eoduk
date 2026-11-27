@@ -5,7 +5,7 @@
    테마는 게임 시간이 정한다(낮 data-theme="day", 일몰~일출 "night"). 지도 색(--t-*, --tile-*, --gu-*, --label-*, --fog*)도 여기. */
 :root, [data-theme="day"]{
   --bg:#f3ead6; --surface:#fbf5e8; --sunk:#ece2cc; --line:#2b2420; --fg:#2b2420; --muted:#6a5a4a;
-  --accent:#a87c2e; --ours:#d9a441; --ours-dark:#a87c2e; --on-ours:#2b2420; --enemy:#b5523b; --danger:#b5523b; --on-danger:#ffffff;
+  --accent:#a87c2e; --ours:#d9a441; --on-ours:#2b2420; --enemy:#b5523b; --danger:#b5523b; --on-danger:#ffffff;
   --timer:#8c3e2c; --night-accent:#6a4a9a; --eyes:#4fe3c1; --ok:#4e7a4e; --bad:#a8432f;
   --shadow:3px 3px 0 #2b2420; --veil:rgba(43,36,32,.45);
   /* 버튼: 얇은 먹선 + 아래쪽 키 그림자 + 윗면 빛 */
@@ -16,13 +16,13 @@
   --t-ink:#2b2420; --t-bridge:#c9b48a; --t-bam:#7f9c66;
   --sealed:#e3dccb; --sealed-line:#c2b8a2; --outline:#6a5a4a; --label-muted:#8a7d6c;
   /* 칸 */
-  --tile-line:#3a2e26; --tile-a:.2; --tile-ours:#d9a441; --tile-dark:#d6ccb6; --tile-gray:#bdb8ac; --tile-gray-line:#9c978a; --tile-neutral:#c9b48a;
+  --tile-line:#3a2e26; --tile-a:.2; --tile-ours:#d9a441; --tile-dark:#d6ccb6; --tile-gray:#bdb8ac;
   --attack:#d9363e; --erode:#9a6ae0; --glow:255, 200, 97;
   --gu-mapo:#3e7c8c; --gu-yongsan:#4e6e8e; --gu-jung:#8d78ad; --gu-yeongdeungpo:#b5523b; --gu-dongjak:#5e8a5a; --gu-gwanak:#9a6a5e;
   --gu-mapo-dark:#2a5a66; --gu-yongsan-dark:#34506e; --gu-jung-dark:#5e4a7e; --gu-yeongdeungpo-dark:#8c3e2c; --gu-dongjak-dark:#3e6a3e; --gu-gwanak-dark:#6e463c;
   --label-bg:#f6efdf; --label-fg:#2b2420; --label-shadow:#2b2420; --pill-enemy:#c23a32; --pill-ours:#a87c2e; --pill-fg:#ffffff;
   --t-hi:#fffaf0; --t-mount:#7f9a64; --t-mount-lit:#a9b98a; --t-mount-shade:#6c8257; --t-rock:#d9d1c1; --t-rock-shade:#a39a89; --t-tree:#53693f; --vignette:rgba(70, 50, 25, .28); --haze:rgba(239, 230, 210, .35);
-  --fog:#efe6d2; --fog-a:.93; --cloud-line:#5a4636; --cloud-fill:#f6efdf; --map-bg:#efe6d2; --dusk:#d9773a;
+  --fog:#efe6d2; --fog-a:.93; --cloud-line:#5a4636; --cloud-fill:#f6efdf; --map-bg:#efe6d2;
   --serif:"Gowun Batang", "AppleMyungjo", serif;
   --sans:"Gowun Dodum", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   color-scheme:light;
@@ -30,7 +30,7 @@
 [data-theme="night"]{
   --t-hi:#f3e6c8; --t-mount:#3c5236; --t-mount-lit:#46593f; --t-mount-shade:#283423; --t-rock:#6a6672; --t-rock-shade:#45414d; --t-tree:#1f2a1b; --vignette:rgba(0, 0, 0, .55); --haze:rgba(15, 12, 20, .25);
   --bg:#0f0c14; --surface:#1a1420; --sunk:#120e18; --line:#8c7a5a; --fg:#e9dfc8; --muted:#a99c86;
-  --accent:#ffb547; --ours:#ffb547; --ours-dark:#a87c2e; --on-ours:#1a1206; --enemy:#d0664c; --danger:#c23a32; --on-danger:#ffffff;
+  --accent:#ffb547; --ours:#ffb547; --on-ours:#1a1206; --enemy:#d0664c; --danger:#c23a32; --on-danger:#ffffff;
   --timer:#4fe3c1; --ok:#79b07a; --bad:#e0745a;
   --shadow:3px 3px 0 #000; --veil:rgba(0,0,0,.6);
   --btn-key:0 3px 0 #000; --btn-key-down:0 1px 0 #000; --btn-hi:inset 0 1px 0 rgba(255, 255, 255, .1);
@@ -210,11 +210,6 @@ input[type=text],input[type=email],input[type=password]{font:inherit;color:var(-
 .nickrow{display:flex;gap:6px}
 .nickrow input{flex:1 1 auto}
 .nickrow .btn{flex:0 0 auto}
-.gulist{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.gucard{all:unset;cursor:pointer;border:2px solid var(--line);background:var(--bg);padding:8px;display:flex;flex-direction:column;gap:2px;font-size:.8rem;min-width:0}
-.gucard b{font-family:var(--serif);font-size:1rem;display:flex;align-items:center;gap:6px}
-.gucard[aria-pressed="true"]{background:var(--ours);color:var(--on-ours);box-shadow:var(--shadow)}
-.gucard:focus-visible{outline:2px solid var(--accent)}
 .side{font-size:.76rem;color:var(--muted);grid-column:1/-1;margin-top:4px}
 
 /* PC(1024px 이상): 헤더 한 줄, 왼쪽 지도 + 오른쪽 패널 340px, 하단 줄 없음 */

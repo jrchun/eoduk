@@ -6,7 +6,7 @@
 // 보이는 순서(먼저 읽혀야 할 것부터): 서울 모양 → 구(이름) → 점령 상태(색·경계) → 움직임(진군·경고) → 칸 이름(확대했을 때만)
 // 그리는 순서: 바탕 → 칸 색 → 한강(벡터) → 경계선 → 유닛 → 안개 → 경고 테두리·이름·알약
 // 색은 styles.css의 CSS 변수(--t-*, --tile-*, --gu-*, --sealed*, --label-*, --pill-*, --fog*)에서 읽는다.
-import { pixelToHex, key, hexDistance, fmtLeft, DIRS } from './rules.js';
+import { pixelToHex, key, fmtLeft, DIRS } from './rules.js';
 import { marchProgress } from './view.js';
 import { drawSprite, IMG, drawImageFoot } from './sprites.js';
 
@@ -22,8 +22,8 @@ const CORNER = [...Array(6)].map((_, i) => { const a = Math.PI / 180 * (60 * i -
 const SOUTH = [[0, 1], [-1, 1]]; // 화면 아래쪽을 보는 두 변(옆면이 보이는 쪽)
 const EDGE_OF_DIR = { '1,0': [0, 1], '-1,0': [3, 4], '0,1': [1, 2], '0,-1': [4, 5], '1,-1': [5, 0], '-1,1': [2, 3] };
 const VARS = ['--t-hi', '--t-mount', '--t-mount-lit', '--t-mount-shade', '--t-rock', '--t-rock-shade', '--t-tree', '--t-land', '--t-river', '--t-river-edge', '--t-wave', '--t-park', '--t-ink', '--t-bridge', '--t-bam', '--t-paper',
-  '--tile-line', '--tile-a', '--tile-ours', '--tile-dark', '--tile-gray', '--tile-gray-line', '--tile-neutral', '--sealed', '--sealed-line', '--outline',
-  '--ours-dark', '--attack', '--erode', '--label-bg', '--label-fg', '--label-muted', '--label-shadow', '--pill-enemy', '--pill-ours', '--pill-fg',
+  '--tile-line', '--tile-a', '--tile-ours', '--tile-dark', '--tile-gray', '--sealed', '--sealed-line', '--outline',
+  '--attack', '--erode', '--label-bg', '--label-fg', '--label-muted', '--label-shadow', '--pill-enemy', '--pill-ours', '--pill-fg',
   '--fog', '--fog-a', '--cloud-line', '--cloud-fill', '--eyes', '--glow', '--fg', '--ours', '--enemy'];
 
 function inPoly(x, y, pts) { let on = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const a = pts[i], b = pts[j]; if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) on = !on; } return on; }
@@ -61,6 +61,9 @@ export class MapView {
         if (c && c.kind !== 'river') this.mounts.push({ ...m, id: pi * 10 + m.k, tile: c });
       }
     }
+    this.mounts.sort((a, b) => depth(a.x, a.y) - depth(b.x, b.y));
+    this.landByDepth = this.tiles.filter(c => c.kind !== 'river').sort((a, b) => depth(a.x, a.y) - depth(b.x, b.y)); // 그리는 순서(북쪽부터)는 변하지 않는다
+    this.version = 0; // 상태가 바뀔 때마다 올려 바탕 그림을 다시 그리게 한다
     this.river = smooth(idx.river || []);
     this.saet = smooth(idx.saetgang || []); // 여의도 남쪽 샛강
     if (opts.interactive !== false) this.bindInput();
@@ -122,7 +125,7 @@ export class MapView {
   }
   hexW() { return this.cam.s * this.idx.size * 1.9; }
   set(partial) {
-    Object.assign(this.state, partial);
+    Object.assign(this.state, partial); this.version++; // 칸 상태(applyTiles)가 바뀐 뒤에도 set을 부른다
     const focus = partial.myGu !== undefined ? (partial.myGu || 'browse') : null;
     if (focus && focus !== this.homed) this.home();
   }
@@ -177,7 +180,6 @@ export class MapView {
     this.cam.x = Math.max(P.x0, Math.min(P.x1, this.cam.x)); this.cam.y = Math.max(P.y0, Math.min(P.y1, this.cam.y));
     this.cam.s = Math.min(this.sDefault * 1.8, Math.max(this.sFit || 6, this.cam.s));
   }
-  clampPan() { this.clamp(); }
 
   // ---------- 입력: 탭(칸 고르기), 우리 칸에서 끌기(진군), 그 밖에 끌기(이동), 두 손가락·휠(확대) ----------
   bindInput() {
@@ -305,18 +307,25 @@ export class MapView {
   }
 
   // ---------- 그리기 ----------
-  render(now) {
-    const theme = this.opts.theme || this.cv.closest?.('[data-theme]')?.dataset.theme || document.documentElement.dataset.theme || 'day';
-    if (theme !== this.theme) { this.theme = theme; this.readVars(); this.fogKey = null; }
-    if (!this.paper) this.makePaper();
-    const g = this.g, st = this.state, night = theme === 'night', s = this.cam.s, idx = this.idx, gu = st.myGu;
-    const fogOn = !this.opts.noFog && !this.overview();
+  // direct: 화면 캔버스에 바로(움직이는 중), 아니면 base 캔버스에 그려 두고 다시 쓴다
+  drawBase(night, direct) {
+    const W = this.cv.width, H = this.cv.height;
+    if (!direct && (!this.base || this.base.width !== W || this.base.height !== H)) { this.base = Object.assign(document.createElement('canvas'), { width: W, height: H }); this.baseG = this.base.getContext('2d'); }
+    const main = this.g, g = this.g = direct ? main : this.baseG;
+    const st = this.state, s = this.cam.s, idx = this.idx, gu = st.myGu, theme = this.theme;
+    // 칸 중심(솟은 높이 반영)과 화면 안 판정은 바탕을 다시 그릴 때만 계산해 두고 매 프레임 다시 쓴다
+    const pos = this.pos = new Map(this.tiles.map(c => [c.id, this.center(c)]));
+    const visible = this.isVisible = c => { const p = pos.get(c.id); return p.x > -80 && p.x < this.w + 80 && p.y > -60 && p.y < this.hgt + 60; };
+    // 구 이름 자리(열린 구는 불 켜진 칸들의 가운데, 봉인된 구는 구 땅의 가운데)
+    if (this.guKey !== this.version) { this.guKey = this.version; this.guCenters = []; } else this.guCenters ||= [];
+    if (!this.guCenters.length) for (const gg of idx.gu.values()) {
+      const own = gg.open ? this.open.filter(c => c.owner === gg.id) : this.tiles.filter(c => c.sealed && c.home === gg.id && c.kind !== 'river');
+      if (own.length) this.guCenters.push({ gg, n: own.length, x: own.reduce((a, c) => a + c.x, 0) / own.length, y: own.reduce((a, c) => a + c.y, 0) / own.length });
+    }
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.fillStyle = this.css('--t-land'); g.fillRect(0, 0, this.cv.width, this.cv.height);
-    g.fillStyle = this.paper; g.fillRect(0, 0, this.cv.width, this.cv.height);
+    g.fillStyle = this.css('--t-land'); g.fillRect(0, 0, W, H);
+    g.fillStyle = this.paper; g.fillRect(0, 0, W, H);
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    const pos = new Map(this.tiles.map(c => [c.id, this.center(c)]));
-    const visible = c => { const p = pos.get(c.id); return p.x > -80 && p.x < this.w + 80 && p.y > -60 && p.y < this.hgt + 60; };
     const tileA = parseFloat(this.css('--tile-a')) || 0.2, land = this.css('--t-land');
     if (this.mixKey !== theme + gu) { this.mixKey = theme + gu; this.mixed = {}; }
     const col = (k, base, a) => (this.mixed[k] ||= mix(base, land, a));
@@ -324,7 +333,7 @@ export class MapView {
     // 1) 칸: 북쪽(먼 쪽)부터 그려 남쪽 칸이 앞을 가린다. 아래쪽 두 변에 옆면(절벽·솟은 면), 그 위에 윗면
     //    색은 봉인 옅은 회색, 어둠, 잿빛, 우리 구 호박색, 그 밖은 주인 색(바탕과 섞은 불투명 색)
     const T = this.slab(), ink = this.css('--t-ink');
-    const order = this.tiles.filter(c => c.kind !== 'river' && visible(c)).sort((a, b) => depth(a.x, a.y) - depth(b.x, b.y));
+    const order = this.landByDepth.filter(visible);
     for (const c of order) {
       const fill = c.sealed ? this.css('--sealed') : c.gray ? col('gray', this.css('--tile-gray'), 0.8) : !c.owner ? this.css('--tile-dark')
         : c.owner === gu ? col('ours', this.css('--tile-ours'), tileA + 0.22) : col(c.owner, this.css('--gu-' + c.owner), tileA + 0.1);
@@ -351,11 +360,10 @@ export class MapView {
     // 2) 한강: 매끈한 벡터 띠(물가선 → 강변 공원 → 물 → 잔물결)
     if (this.river.length > 1) {
       this.planeTransform();
-      const path = () => { g.beginPath(); g.moveTo(this.river[0][0], this.river[0][1]); for (let i = 1; i < this.river.length; i++) g.lineTo(this.river[i][0], this.river[i][1]); };
+      const path = () => this.trace(this.river);
       const W = 0.9, px = 1 / (s * 0.42);
       g.lineCap = 'round'; g.lineJoin = 'round';
-      const saet = (w, col) => { if (this.saet.length < 2) return; g.beginPath(); g.moveTo(this.saet[0][0], this.saet[0][1]); for (let i = 1; i < this.saet.length; i++) g.lineTo(this.saet[i][0], this.saet[i][1]); g.lineWidth = w; g.strokeStyle = col; g.stroke(); };
-      g.lineCap = 'round'; g.lineJoin = 'round';
+      const saet = (w, col) => { if (this.saet.length < 2) return; this.trace(this.saet); g.lineWidth = w; g.strokeStyle = col; g.stroke(); };
       saet(0.62, this.css('--t-park')); saet(0.4 + 2.2 * px, this.css('--t-river-edge')); saet(0.4, this.css('--t-river'));
       path(); g.lineWidth = W + 0.3; g.strokeStyle = this.css('--t-park'); g.stroke();
       path(); g.lineWidth = W + 2.2 * px; g.strokeStyle = this.css('--t-river-edge'); g.stroke();
@@ -363,16 +371,6 @@ export class MapView {
       const wall = T / (s * D);
       path(); g.lineWidth = W; g.strokeStyle = ink; g.globalAlpha = 0.55; g.stroke(); g.globalAlpha = 1;
       g.save(); g.translate(0, wall / 2); path(); g.lineWidth = Math.max(0.1, W - wall); g.strokeStyle = this.css('--t-river'); g.stroke(); g.restore();
-      g.save(); g.translate(0, wall / 2); path(); g.lineWidth = Math.max(px, 0.02); g.strokeStyle = this.css('--t-wave'); g.setLineDash([0.18, 0.32]); g.lineDashOffset = -now / 4000; g.globalAlpha = 0.55; g.stroke(); g.restore();
-      g.globalAlpha = 1; g.setLineDash([]);
-      if (idx.bamseom) { const [bx, by] = idx.bamseom; g.beginPath(); g.ellipse(bx, by, 0.3, 0.1, -0.25, 0, Math.PI * 2); g.fillStyle = this.css('--t-bam'); g.fill(); }
-      for (const b of idx.bridges || []) { // 다리
-        const [ax, ay] = b.at, line = b.saet && this.saet.length > 1 ? this.saet : this.river;
-        const n = normalAt(line, ax, ay), half = (b.saet ? 0.2 : W / 2) + 0.18;
-        g.beginPath(); g.moveTo(ax - n[0] * half, ay - n[1] * half); g.lineTo(ax + n[0] * half, ay + n[1] * half);
-        g.lineCap = 'butt'; g.lineWidth = 0.09; g.strokeStyle = this.css('--t-ink'); g.globalAlpha = 0.5; g.stroke();
-        g.lineWidth = 0.06; g.strokeStyle = this.css('--t-bridge'); g.globalAlpha = 1; g.stroke();
-      }
       g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     }
 
@@ -403,6 +401,50 @@ export class MapView {
     stroke(strong, this.css('--tile-line'), zoomed ? 1.6 : 1.1, 0.75);
     stroke(outer, this.css('--outline'), 1.6, 0.8);
 
+
+    // 4) 산 봉우리(뒤쪽부터)
+    for (const m of this.mounts) if (visible(m.tile)) this.mountain(m, night);
+    this.g = main;
+  }
+  trace(line) { const g = this.g; g.beginPath(); g.moveTo(line[0][0], line[0][1]); for (let i = 1; i < line.length; i++) g.lineTo(line[i][0], line[i][1]); }
+
+  // 그리기는 두 겹: 움직이지 않는 바탕(칸·강·경계·산)은 카메라·상태·테마가 바뀔 때만 base 캔버스에 다시 그리고,
+  // 매 프레임에는 그 그림을 붙인 뒤 움직이는 것(물결·진군·빛 번짐·안개 눈·경고 테두리·이름)만 그린다.
+  render(now) {
+    const theme = this.opts.theme || this.cv.closest?.('[data-theme]')?.dataset.theme || document.documentElement.dataset.theme || 'day';
+    if (theme !== this.theme) { this.theme = theme; this.readVars(); this.fogKey = null; }
+    if (!this.paper) this.makePaper();
+    const g = this.g, st = this.state, night = theme === 'night', s = this.cam.s, idx = this.idx, gu = st.myGu;
+    const fogOn = !this.opts.noFog && !this.overview();
+    const bk = [this.version, this.cam.x, this.cam.y, s, this.w, this.hgt, this.inset, theme, this.dpr].join('|');
+    // 끌기·확대처럼 바탕이 프레임마다 바뀌는 동안은 저장 그림을 거치지 않고 화면에 바로 그린다(거치면 오히려 느림)
+    this.moving = bk !== this.baseKey ? (this.moving || 0) + 1 : 0; this.baseKey = bk;
+    if (this.moving > 1) { this.drawBase(night, true); this.baseFresh = false; }
+    else {
+      if (this.moving === 1 || !this.baseFresh) { this.drawBase(night, false); this.baseFresh = true; }
+      g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(this.base, 0, 0);
+    }
+    const pos = this.pos, visible = this.isVisible;
+    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+
+    // 한강 잔물결(흐름)과 그 위의 밤섬·다리
+    if (this.river.length > 1) {
+      this.planeTransform();
+      const W = 0.9, px = 1 / (s * 0.42), wall = this.slab() / (s * D);
+      g.lineCap = 'round'; g.lineJoin = 'round';
+      g.save(); g.translate(0, wall / 2); this.trace(this.river);
+      g.lineWidth = Math.max(px, 0.02); g.strokeStyle = this.css('--t-wave'); g.setLineDash([0.18, 0.32]); g.lineDashOffset = -now / 4000; g.globalAlpha = 0.55; g.stroke(); g.restore();
+      g.globalAlpha = 1; g.setLineDash([]);
+      if (idx.bamseom) { const [bx, by] = idx.bamseom; g.beginPath(); g.ellipse(bx, by, 0.3, 0.1, -0.25, 0, Math.PI * 2); g.fillStyle = this.css('--t-bam'); g.fill(); }
+      for (const b of idx.bridges || []) {
+        const [ax, ay] = b.at, line = b.saet && this.saet.length > 1 ? this.saet : this.river;
+        const n = normalAt(line, ax, ay), half = (b.saet ? 0.2 : W / 2) + 0.18;
+        g.beginPath(); g.moveTo(ax - n[0] * half, ay - n[1] * half); g.lineTo(ax + n[0] * half, ay + n[1] * half);
+        g.lineCap = 'butt'; g.lineWidth = 0.09; g.strokeStyle = this.css('--t-ink'); g.globalAlpha = 0.5; g.stroke();
+        g.lineWidth = 0.06; g.strokeStyle = this.css('--t-bridge'); g.globalAlpha = 1; g.stroke();
+      }
+      g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    }
     // 밤: 우리 칸 위 호박색 빛 번짐
     if (night && gu) {
       const glow = this.css('--glow');
@@ -427,11 +469,6 @@ export class MapView {
       g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); g.setLineDash([]);
     }
     const objs = [], big = s >= this.sDefault * 0.55;
-    // 산 봉우리(깊이 순으로 유닛·등불과 섞어 그린다)
-    for (const m of this.mounts) {
-      if (!visible(m.tile)) continue;
-      objs.push({ d: depth(m.x, m.y) - 0.01, draw: () => this.mountain(m, night) });
-    }
     for (const id of st.reinforced) {
       const c = idx.byId.get(id); if (!c) continue;
       const ux = c.x - idx.size * 0.3, uy = c.y + idx.size * 0.25;
@@ -488,14 +525,12 @@ export class MapView {
     const hot = new Set([st.selected, ...st.incomingIds].filter(Boolean));
     for (const id of hot) { const c = idx.byId.get(id); if (c) this.text(c.name, pos.get(c.id).x, pos.get(c.id).y + 16, 13, false, placed, true); }
     const guFs = this.pc ? 16 : 14;
-    for (const gg of idx.gu.values()) {
+    for (const { gg, x, y, n } of this.guCenters) {
       if (tileNames && gg.open) continue; // 크게 볼 때 열린 구는 칸 이름으로
-      const own = gg.open ? this.tiles.filter(c => !c.sealed && c.owner === gg.id) : this.tiles.filter(c => c.sealed && c.home === gg.id && c.kind !== 'river');
-      if (!own.length) continue;
-      const x = own.reduce((a, c) => a + c.x, 0) / own.length, y = own.reduce((a, c) => a + c.y, 0) / own.length, p = this.project(x, y);
+      const p = this.project(x, y);
       if (p.x < -60 || p.x > this.w + 60 || p.y < -20 || p.y > this.hgt + 20) continue;
       const small = this.hexW() < 30; // 서울 전체를 볼 때는 작게
-      this.text(gg.open ? `${gg.name} ${own.length}` : gg.name, p.x, p.y, gg.open ? (small ? 12 : guFs) : (small ? 10 : guFs - 3), !gg.open, placed, gg.open, gg.open);
+      this.text(gg.open ? `${gg.name} ${n}` : gg.name, p.x, p.y, gg.open ? (small ? 12 : guFs) : (small ? 10 : guFs - 3), !gg.open, placed, gg.open, gg.open);
     }
     if (tileNames) for (const c of this.tiles) {
       if (c.kind === 'river' || c.sealed || hot.has(c.id) || !visible(c)) continue;

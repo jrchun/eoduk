@@ -2,7 +2,7 @@
 // 그림을 따로 그리지 않고 실제 게임 지도(MapView)로 장면을 만든다. 지도 디자인이 바뀌면 온보딩·공유 카드도 저절로 같이 바뀐다.
 // 장면은 그때의 실제 칸 상태 위에 연출용 상태(잿빛 칸, 진군, 공격 경고)만 얹는다.
 import { MapView } from './map.js';
-import { indexMap, applyTiles, darkFront } from './view.js';
+import { indexMap, darkFront } from './view.js';
 
 const MIN = 60000;
 const byName = (idx, n) => [...idx.byId.values()].find(c => c.name === n);
@@ -40,7 +40,7 @@ export const SCENES = [
 ];
 
 // 온보딩 캔버스에 장면 i를 그리고 움직인다. 캔버스가 화면에서 빠지면 저절로 멈춘다.
-export function startScene(cv, i, mapData, rows) {
+export function startScene(cv, i, mapData) {
   const sc = SCENES[i], r = cv.getBoundingClientRect();
   cv.dataset.theme = sc.theme;
   const idx = sceneIdx(mapData), base = Date.now();
@@ -74,10 +74,13 @@ function renderMapImage(idx, gu, w, h, theme = 'day') {
 // 1080×1350 공유 카드: 한지 바탕, 큰 글씨, 실제 지도
 export function drawShareCard(cv, { idx, gu, guName, kept, lost, night }) {
   const g = cv.getContext('2d'), W = cv.width, H = cv.height;
-  const v = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-  g.fillStyle = '#efe6d2'; g.fillRect(0, 0, W, H);
-  g.strokeStyle = '#2b2420'; g.lineWidth = 8; g.strokeRect(40, 40, W - 80, H - 80);
-  g.fillStyle = '#2b2420'; g.textAlign = 'center';
+  // 색은 낮 테마 변수(styles.css)에서 읽는다
+  const probe = Object.assign(document.createElement('div'), { hidden: true }); probe.dataset.theme = 'day'; document.body.append(probe);
+  const cs = getComputedStyle(probe), pick = ['--line', '--map-bg', '--muted'].map(n => cs.getPropertyValue(n).trim()); probe.remove();
+  const [ink, paper, muted] = pick;
+  g.fillStyle = paper; g.fillRect(0, 0, W, H);
+  g.strokeStyle = ink; g.lineWidth = 8; g.strokeRect(40, 40, W - 80, H - 80);
+  g.fillStyle = ink; g.textAlign = 'center';
   g.font = '700 64px "Gowun Batang", serif'; g.fillText('어둑시니', W / 2, 150);
   g.font = '34px "Gowun Dodum", sans-serif'; g.fillText(`${night} 밤이 지나고`, W / 2, 215);
   g.font = '700 88px "Gowun Batang", serif'; g.fillText(guName, W / 2, 330);
@@ -86,9 +89,9 @@ export function drawShareCard(cv, { idx, gu, guName, kept, lost, night }) {
   g.fillText(`${lost}칸을 어둠에 내줬어요`, W / 2, 475);
   const map = renderMapImage(idx, gu, 900, 640);
   g.drawImage(map, 90, 510, 900, 640);
-  g.strokeStyle = '#2b2420'; g.lineWidth = 4; g.strokeRect(90, 510, 900, 640);
-  g.fillStyle = '#2b2420'; g.font = '700 40px "Gowun Batang", serif';
+  g.strokeStyle = ink; g.lineWidth = 4; g.strokeRect(90, 510, 900, 640);
+  g.fillStyle = ink; g.font = '700 40px "Gowun Batang", serif';
   g.fillText('해 지기 전에 등불을 지켜라', W / 2, H - 140);
-  g.font = '32px "Gowun Dodum", sans-serif'; g.fillStyle = v('--muted') || '#6e6253';
+  g.font = '32px "Gowun Dodum", sans-serif'; g.fillStyle = muted;
   g.fillText(location.host || 'eoduk.woongstudio.com', W / 2, H - 88);
 }

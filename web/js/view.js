@@ -1,6 +1,6 @@
 // 화면 규칙(순수 함수, DOM 없음). 지도 데이터(web/data/map.json)와 서버 상태(game_state)를 엮는다.
 // v3: 칸 상태는 어둠(미개척, 주인 없음·잿빛 아님) → 등불(주인 있음) → 잿빛(밤에 먹힘). 승패는 연합(side n/s) 단위.
-import { neighbors, key, hexDistance, marchMinutes, settleNeed, allianceMods, seasonScore, BAL } from './rules.js';
+import { neighbors, key, hexDistance, marchMinutes, settleNeed, seasonScore, BAL } from './rules.js';
 
 // map.json + 서버 tiles([id, owner, defense, gray, progress]) → 칸 목록
 export function indexMap(map) {
@@ -10,7 +10,8 @@ export function indexMap(map) {
   for (const c of byId.values()) c.adj = neighbors(c.q, c.r).map(([q, r]) => byKey.get(key(q, r))?.id).filter(Boolean);
   const peaks = map.peaks || [];
   for (const c of byId.values()) c.elev = c.kind === 'river' ? 0 : elevation(peaks, c.x, c.y);
-  return { byId, byKey, gu, size: map.size, river: map.river, saetgang: map.saetgang || [], bridges: map.bridges || [], sprites: map.sprites || [], bamseom: map.bamseom || null, peaks };
+  const halls = new Map([...byId.values()].filter(c => c.hall).map(c => [c.hall, c]));
+  return { byId, byKey, gu, halls, size: map.size, river: map.river, saetgang: map.saetgang || [], bridges: map.bridges || [], sprites: map.sprites || [], bamseom: map.bamseom || null, peaks };
 }
 // 지형 높이(km, 화면 전용): 가장 가까운 산의 종 모양 높이. step 단위로 끊어 계단식 디오라마가 되게 한다
 export function elevation(peaks, x, y, step = 0.06) {
@@ -32,7 +33,7 @@ export const isDark = c => playable(c) && !c.owner; // 어둠(미개척) 또는 
 export function tileState(c) { return !playable(c) ? (c?.sealed ? 'sealed' : 'river') : c.owner ? 'lit' : c.gray ? 'gray' : 'dark'; }
 export const sideOf = (idx, gu) => idx.gu.get(gu)?.side || null;
 const litBy = (idx, id, side) => { const c = idx.byId.get(id); return isLit(c) && sideOf(idx, c.owner) === side; };
-export function hallOf(idx, gu) { for (const c of idx.byId.values()) if (c.hall === gu) return c; return null; }
+export function hallOf(idx, gu) { return idx.halls?.get(gu) || null; } // 구청 칸은 지도 데이터로 정해져 있어 indexMap에서 한 번만 찾는다
 
 // 붙어 있는 같은 연합 등불 칸 수(연결 보너스)
 export function ownNeighborCount(idx, id, gu) { const side = sideOf(idx, gu); return idx.byId.get(id).adj.filter(n => litBy(idx, n, side)).length; }
@@ -90,7 +91,6 @@ export function countTiles(idx) {
 }
 // 연합이 가진 랜드마크 효과
 export function sideEffects(idx, side) { return [...idx.byId.values()].filter(c => c.effect && litBy(idx, c.id, side)).map(c => c.effect); }
-export function sideMods(idx, side) { return allianceMods(sideEffects(idx, side)); }
 // 시야: 우리 연합 등불 칸에서 (2 + sight) 칸 안
 export function visibleSet(idx, side, sight = 0) {
   const lit = [...idx.byId.values()].filter(c => litBy(idx, c.id, side)), r = BAL.sightBase + sight, out = new Set();
