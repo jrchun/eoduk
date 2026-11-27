@@ -8,7 +8,15 @@ export function indexMap(map) {
   for (const g of map.gu) gu.set(g.id, g);
   for (const t of map.tiles) { const c = { ...t, owner: null, defense: 0, gray: false, progress: {} }; byId.set(t.id, c); byKey.set(key(t.q, t.r), c); }
   for (const c of byId.values()) c.adj = neighbors(c.q, c.r).map(([q, r]) => byKey.get(key(q, r))?.id).filter(Boolean);
-  return { byId, byKey, gu, size: map.size, river: map.river, saetgang: map.saetgang || [], bridges: map.bridges || [], sprites: map.sprites || [], bamseom: map.bamseom || null };
+  const peaks = map.peaks || [];
+  for (const c of byId.values()) c.elev = c.kind === 'river' ? 0 : elevation(peaks, c.x, c.y);
+  return { byId, byKey, gu, size: map.size, river: map.river, saetgang: map.saetgang || [], bridges: map.bridges || [], sprites: map.sprites || [], bamseom: map.bamseom || null, peaks };
+}
+// 지형 높이(km, 화면 전용): 가장 가까운 산의 종 모양 높이. step 단위로 끊어 계단식 디오라마가 되게 한다
+export function elevation(peaks, x, y, step = 0.06) {
+  let h = 0;
+  for (const p of peaks || []) { const d = Math.hypot(x - p.at[0], y - p.at[1]) / p.r; h = Math.max(h, p.h * Math.exp(-d * d)); }
+  return h < step / 2 ? 0 : Math.round(h / step) * step;
 }
 export function applyTiles(idx, rows) {
   for (const [id, owner, defense, gray, progress] of rows || []) {

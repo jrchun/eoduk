@@ -257,3 +257,16 @@ test('시간 막대: 낮은 일출→일몰, 밤은 일몰→다음 일출(자�
   const t3 = Date.parse('2026-11-28T03:00:00+09:00'), sl = sunArc(iso(R.phaseAt(t3)), t3);
   assert.equal(sl.kind, 'night'); assert.ok(sl.t > sl.midnight && sl.t < 1);
 });
+
+test('지형 높이(화면 전용): 산 꼭대기가 가장 높고 멀어지면 0, 계단 단위로 끊긴다', () => {
+  const peaks = [{ name: '남산', at: [0, 0], h: 0.26, r: 0.85 }];
+  assert.equal(V.elevation(peaks, 0, 0), 0.24); // 0.26 → 0.06 단위로 0.24
+  assert.ok(V.elevation(peaks, 0.5, 0) < V.elevation(peaks, 0, 0));
+  assert.equal(V.elevation(peaks, 5, 5), 0);
+  assert.equal(V.elevation([], 0, 0), 0);
+  const map = JSON.parse(readFileSync(new URL('../web/data/map.json', import.meta.url)));
+  const idx = V.indexMap(map);
+  const namsan = [...idx.byId.values()].find(c => c.name === '남산서울타워');
+  assert.ok(namsan.elev > 0, '남산 칸은 솟아 있다');
+  assert.ok([...idx.byId.values()].filter(c => c.kind === 'river').every(c => c.elev === 0));
+});
